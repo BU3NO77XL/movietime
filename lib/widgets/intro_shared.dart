@@ -17,7 +17,11 @@ class DesignTransform {
   final Offset offset;
 
   factory DesignTransform.fromSize(Size size) {
-    final scale = math.max(
+    // BoxFit.contain: o scale garante que o frame 390×844 sempre caiba
+    // dentro da tela (scale ≤ 1), evitando overflow em qualquer dispositivo
+    // (telas mais altas/estreitas, tablets, fontes do sistema, etc.).
+    // As sobras são cobertas pelo fundo preto #0d0d0d do Scaffold.
+    final scale = math.min(
       size.width / introDesignWidth,
       size.height / introDesignHeight,
     );
@@ -111,17 +115,16 @@ class IntroBackground extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         const ColoredBox(color: Color(0xFF0D0D0D)),
-        GradientBlobs(
-          progress: progress ?? 0.5,
-          size: size,
-        ),
+        GradientBlobs(progress: progress ?? 0.5, size: size),
         if (showNoise)
           Positioned.fill(
             child: IgnorePointer(child: CustomPaint(painter: NoisePainter())),
           ),
         if (showRings)
           Positioned(
-            left: transform.mapX(0),
+            // A decoraÃ§Ã£o deve permanecer colada Ã  borda fÃ­sica da tela;
+            // mapX(0) adicionaria o offset de centralizaÃ§Ã£o em telas largas.
+            left: 0,
             top: transform.mapY(0),
             child: Transform.scale(
               scale: transform.scale,
@@ -144,11 +147,7 @@ class IntroBackground extends StatelessWidget {
 /// - Glow roxo com pico próximo à borda esquerda, ~46% da altura.
 /// - Glow ciano (blob inferior) suave.
 class GradientBlobs extends StatelessWidget {
-  const GradientBlobs({
-    super.key,
-    required this.progress,
-    required this.size,
-  });
+  const GradientBlobs({super.key, required this.progress, required this.size});
 
   final double progress; // 0.0 → 1.0
   final Size size;

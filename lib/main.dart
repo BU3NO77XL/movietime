@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'screens/intro.dart';
+import 'screens/movie_time.dart';
 
 void main() {
   runApp(const MovieTimeApp());

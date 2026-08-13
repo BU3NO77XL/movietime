@@ -34,8 +34,11 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  flutter_shaders: ^0.1.3
   flutter_svg: ^2.3.0
   motion_blur: ^0.0.2
+  animations: ^2.2.0
+  dotlottie_flutter: ^0.1.5
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +65,21 @@ flutter:
     - assets/fonts/
     - assets/icons/
     - assets/images/
+    - assets/images/control_profile/images/
+    - assets/home/
+    - assets/home/images/
+    - assets/home/vectors/
+    - assets/mylist/images/
+    - assets/mylist/vectors/
+    - assets/watch/actions/
+    - assets/watch/episodes/
+    - assets/watch/images/
+    - assets/watch/vectors/
+    - assets/watch_series_mylist/images/
+    - assets/watch_series_mylist/icons/
+
+  shaders:
+    - assets/shaders/motion_blur.frag
 
   fonts:
     - family: Poppins
@@ -76,8 +94,12 @@ flutter:
           weight: 700
     - family: Inter
       fonts:
+        - asset: assets/fonts/Inter-Regular.otf
+          weight: 400
         - asset: assets/fonts/Inter-Medium.ttf
           weight: 500
+        - asset: assets/fonts/Inter-SemiBold.otf
+          weight: 600
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -16,10 +16,14 @@ class ForgotPassword extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0D0D0D),
+        resizeToAvoidBottomInset: false,
+        body: SafeArea(
+          child: LayoutBuilder(
+          builder: (context, constraints) {
           final size = Size(constraints.maxWidth, constraints.maxHeight);
           final transform = DesignTransform.fromSize(size);
 
@@ -113,7 +117,7 @@ class ForgotPassword extends StatelessWidget {
                     scale: transform.scale,
                     alignment: Alignment.topLeft,
                     child: const Text(
-                      'Forgot password',
+                      'Esqueceu a senha',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white,
@@ -139,7 +143,7 @@ class ForgotPassword extends StatelessWidget {
                       child: Column(
                         children: [
                           Text(
-                            'Set password',
+                            'Definir senha',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Colors.white,
@@ -152,7 +156,7 @@ class ForgotPassword extends StatelessWidget {
                           ),
                           SizedBox(height: 5),
                           Text(
-                            'Let’s create your profile',
+                            'Vamos criar o seu perfil',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Color(0xFF9E9E9E),
@@ -182,12 +186,12 @@ class ForgotPassword extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // New password
-                          _FieldLabel(label: 'New password'),
+                          _FieldLabel(label: 'Nova senha'),
                           SizedBox(height: 10),
                           _PasswordField(),
                           SizedBox(height: 10),
                           Text(
-                            'Enter at least 8 character',
+                            'Digite pelo menos 8 caracteres',
                             style: TextStyle(
                               color: Color(0xFF525252),
                               fontSize: 10,
@@ -199,7 +203,7 @@ class ForgotPassword extends StatelessWidget {
                           ),
                           SizedBox(height: 20),
                           // Confirm new password
-                          _FieldLabel(label: 'Confirm new password'),
+                          _FieldLabel(label: 'Confirmar nova senha'),
                           SizedBox(height: 10),
                           _PasswordField(),
                         ],
@@ -231,7 +235,7 @@ class ForgotPassword extends StatelessWidget {
                     scale: transform.scale,
                     alignment: Alignment.topLeft,
                     child: const Text(
-                      'Cancel',
+                      'Cancelar',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Color(0xFF525252),
@@ -248,6 +252,8 @@ class ForgotPassword extends StatelessWidget {
             ),
           );
         },
+          ),
+        ),
       ),
     );
   }
@@ -336,7 +342,7 @@ class _ContinueButton extends StatelessWidget {
       ),
       child: const Center(
         child: Text(
-          'Continue',
+          'Continuar',
           style: TextStyle(
             color: Colors.white,
             fontSize: 14,
