@@ -4,9 +4,7 @@ import path from 'node:path';
 const supabaseUrl = process.env.SUPABASE_URL;
 const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
 const bucketName = process.env.SUPABASE_BUCKET_NAME || 'avatars';
-const sourceDir =
-  process.env.AVATAR_SOURCE_DIR ||
-  path.resolve(process.cwd(), 'public', 'avatars', 'images');
+const sourceDir = path.resolve(process.cwd(), 'public', 'avatars', 'images');
 
 if (!supabaseUrl || !publishableKey) {
   throw new Error(
