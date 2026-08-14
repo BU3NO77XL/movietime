@@ -147,6 +147,44 @@ Se ela não for informada, o app usa:
 https://movietimeweb.vercel.app
 ```
 
+### Scripts prontos
+
+No Windows:
+
+```bat
+scripts\run.bat
+scripts\build-apk.bat
+scripts\build-web.bat
+```
+
+Com outra API:
+
+```bat
+scripts\run.bat https://sua-api.vercel.app
+scripts\build-apk.bat https://sua-api.vercel.app
+scripts\build-web.bat https://sua-api.vercel.app
+```
+
+No macOS/Linux:
+
+```bash
+sh scripts/run.sh
+sh scripts/build-apk.sh
+sh scripts/build-web.sh
+```
+
+Com outra API:
+
+```bash
+sh scripts/run.sh https://sua-api.vercel.app
+sh scripts/build-apk.sh https://sua-api.vercel.app
+sh scripts/build-web.sh https://sua-api.vercel.app
+```
+
+Se nenhuma URL for passada, os scripts usam a API padrão da Vercel.
+
+### Comandos manuais
+
 Para usar outro deploy da Vercel:
 
 ```bash
