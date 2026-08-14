@@ -5,6 +5,7 @@ class AuthUser {
     required this.name,
     required this.role,
     this.avatarUrl,
+    this.createdAt,
     this.preferences,
   });
 
@@ -15,6 +16,7 @@ class AuthUser {
       name: json['name']?.toString() ?? '',
       role: json['role']?.toString() ?? 'client',
       avatarUrl: json['avatarUrl']?.toString(),
+      createdAt: json['createdAt']?.toString(),
       preferences: json['preferences'] is Map<String, dynamic>
           ? UserPreferences.fromJson(
               json['preferences'] as Map<String, dynamic>,
@@ -28,6 +30,7 @@ class AuthUser {
   final String name;
   final String role;
   final String? avatarUrl;
+  final String? createdAt;
   final UserPreferences? preferences;
 }
 

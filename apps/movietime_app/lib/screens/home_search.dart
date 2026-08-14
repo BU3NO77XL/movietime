@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../widgets/authenticated_avatar_image.dart';
+
 class HomeSearchScreen extends StatefulWidget {
   const HomeSearchScreen({super.key, this.scrollController});
 
@@ -24,23 +26,19 @@ class _HomeSearchScreenState extends State<HomeSearchScreen> {
   static const _typeFilters = ['All', 'Movies', 'Series', 'Artists'];
   static const _artists = [
     _HomeSearchArtist(
-      image:
-          'assets/images/control_profile/images/rectangle-395048-e872905c.png',
+      avatarIndex: 0,
       name: 'Tom Hanks',
     ),
     _HomeSearchArtist(
-      image:
-          'assets/images/control_profile/images/rectangle-395048-e2a7c4c6.png',
+      avatarIndex: 1,
       name: 'Emma Stone',
     ),
     _HomeSearchArtist(
-      image:
-          'assets/images/control_profile/images/rectangle-395048-72a84d89.png',
+      avatarIndex: 2,
       name: 'Emily Blunt',
     ),
     _HomeSearchArtist(
-      image:
-          'assets/images/control_profile/images/rectangle-395048-4d7c7301.png',
+      avatarIndex: 3,
       name: 'Tom Hardy',
     ),
   ];
@@ -1005,8 +1003,8 @@ class _ArtistResultCard extends StatelessWidget {
       child: Column(
         children: [
           ClipOval(
-            child: Image.asset(
-              artist.image,
+            child: AuthenticatedAvatarImage(
+              avatarIndex: artist.avatarIndex,
               width: 60,
               height: 60,
               fit: BoxFit.cover,
@@ -1288,8 +1286,8 @@ class _HomeSearchItem {
 }
 
 class _HomeSearchArtist {
-  const _HomeSearchArtist({required this.image, required this.name});
+  const _HomeSearchArtist({required this.avatarIndex, required this.name});
 
-  final String image;
+  final int avatarIndex;
   final String name;
 }

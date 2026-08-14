@@ -1,0 +1,1 @@
+const totalRemoteAvatars = 255;

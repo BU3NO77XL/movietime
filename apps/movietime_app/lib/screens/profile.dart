@@ -1,7 +1,13 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../services/api_client.dart';
+import '../services/avatar_catalog.dart';
+import '../services/auth_models.dart';
+import '../services/auth_service.dart';
+import '../widgets/authenticated_avatar_image.dart';
 import '../widgets/home_bottom_nav.dart';
 import 'home.dart';
 import 'mylist.dart';
@@ -14,8 +20,152 @@ const _border = Color(0xFF262626);
 const _muted = Color(0xFF5E5E5E);
 const _danger = Color(0xFFFF4C61);
 
-class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+class ProfileScreenData {
+  const ProfileScreenData({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.role,
+    required this.avatarIndex,
+    required this.genres,
+    this.createdAt,
+    this.recommendationsUpdatedAt,
+  });
+
+  factory ProfileScreenData.fromAuthUser(AuthUser user) {
+    return ProfileScreenData(
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      avatarIndex: user.preferences?.avatarIndex ?? 0,
+      genres: user.preferences?.genres ?? const [],
+      createdAt: user.createdAt,
+      recommendationsUpdatedAt: user.preferences?.recommendationsUpdatedAt,
+    );
+  }
+
+  ProfileScreenData copyWith({
+    int? id,
+    String? name,
+    String? email,
+    String? role,
+    int? avatarIndex,
+    List<String>? genres,
+    String? createdAt,
+    String? recommendationsUpdatedAt,
+  }) {
+    return ProfileScreenData(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      role: role ?? this.role,
+      avatarIndex: avatarIndex ?? this.avatarIndex,
+      genres: genres ?? this.genres,
+      createdAt: createdAt ?? this.createdAt,
+      recommendationsUpdatedAt:
+          recommendationsUpdatedAt ?? this.recommendationsUpdatedAt,
+    );
+  }
+
+  final int id;
+  final String name;
+  final String email;
+  final String role;
+  final int avatarIndex;
+  final List<String> genres;
+  final String? createdAt;
+  final String? recommendationsUpdatedAt;
+}
+
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({
+    super.key,
+    this.authService,
+    this.initialProfile,
+    this.useRemoteAvatars = true,
+  });
+
+  final AuthService? authService;
+  final ProfileScreenData? initialProfile;
+  final bool useRemoteAvatars;
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  static const _fallbackProfile = ProfileScreenData(
+    id: 0,
+    name: 'Usuário MovieTime',
+    email: 'email@example.com',
+    role: 'client',
+    avatarIndex: 0,
+    genres: [],
+  );
+
+  late final AuthService _authService;
+  late final bool _ownsAuthService;
+  late ProfileScreenData _profile;
+  bool _isLoading = true;
+  bool _isRefreshing = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownsAuthService = widget.authService == null;
+    _authService = widget.authService ?? AuthService();
+    _profile = widget.initialProfile ?? _fallbackProfile;
+    _isLoading = widget.initialProfile == null;
+
+    if (widget.initialProfile == null) {
+      _loadProfile();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_ownsAuthService) {
+      _authService.close();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadProfile({bool refresh = false}) async {
+    if (refresh) {
+      setState(() {
+        _isRefreshing = true;
+        _errorMessage = null;
+      });
+    }
+
+    try {
+      final user = await _authService.profile();
+      if (!mounted) return;
+
+      setState(() {
+        _profile = ProfileScreenData.fromAuthUser(user);
+        _isLoading = false;
+        _isRefreshing = false;
+        _errorMessage = null;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isRefreshing = false;
+        _errorMessage = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _isRefreshing = false;
+        _errorMessage = 'Não foi possível carregar seu perfil agora.';
+      });
+    }
+  }
 
   Future<void> _openEditProfileDrawer(BuildContext context) {
     return showModalBottomSheet<void>(
@@ -25,12 +175,81 @@ class ProfileScreen extends StatelessWidget {
       useSafeArea: false,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
-      builder: (context) => const _EditProfileDrawer(),
+      builder: (context) => _EditProfileDrawer(
+        profile: _profile,
+        onSave: _saveProfileEdits,
+        useRemoteAvatars: widget.useRemoteAvatars,
+      ),
     );
+  }
+
+  Future<void> _saveProfileEdits(String name, int avatarIndex) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw const ApiException('Digite um nome válido.');
+    }
+
+    final avatarChangedWithoutGenres =
+        avatarIndex != _profile.avatarIndex && _profile.genres.length < 3;
+
+    final updatedUser = await _authService.updateProfile(
+      userId: _profile.id == 0 ? null : _profile.id,
+      name: trimmedName,
+    );
+
+    if (avatarIndex != _profile.avatarIndex &&
+        _profile.id != 0 &&
+        _profile.genres.length >= 3) {
+      await _authService.savePreferences(
+        userId: _profile.id,
+        avatarIndex: avatarIndex,
+        genres: _profile.genres,
+      );
+    }
+
+    if (!mounted) return;
+
+    final nextProfile = ProfileScreenData.fromAuthUser(updatedUser).copyWith(
+      avatarIndex: avatarIndex,
+      genres: updatedUser.preferences?.genres ?? _profile.genres,
+      createdAt: updatedUser.createdAt ?? _profile.createdAt,
+      recommendationsUpdatedAt:
+          updatedUser.preferences?.recommendationsUpdatedAt ??
+          _profile.recommendationsUpdatedAt,
+    );
+
+    setState(() => _profile = nextProfile);
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            avatarChangedWithoutGenres
+                ? 'Nome salvo. Para persistir avatar, defina 3 gêneros em Configurações.'
+                : 'Perfil atualizado com sucesso.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   void _openSettings(BuildContext context) {
     Navigator.of(context).push(cinematicPageRoute(const SettingScreen()));
+  }
+
+  void _openAdminAccess(BuildContext context) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Acessos administrativos ainda não estão disponíveis no app Flutter.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   @override
@@ -68,68 +287,72 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
             ),
-            SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(22, 42, 24, 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _ProfileHeader(onSettingsTap: () => _openSettings(context)),
-                  const SizedBox(height: 54),
-                  _ProfilePeople(
-                    onEditTap: () => _openEditProfileDrawer(context),
-                  ),
-                  const SizedBox(height: 54),
-                  const _ProfileSection(
-                    title: 'Information',
-                    child: _SettingsCard(
+            RefreshIndicator(
+              onRefresh: () => _loadProfile(refresh: true),
+              color: Colors.white,
+              backgroundColor: _card,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.fromLTRB(22, 42, 24, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ProfileHeader(
+                      onSettingsTap: () => _openSettings(context),
+                      isRefreshing: _isRefreshing,
+                    ),
+                    const SizedBox(height: 40),
+                    _ProfileSummaryCard(
+                      profile: _profile,
+                      loading: _isLoading,
+                      errorMessage: _errorMessage,
+                      onRetry: () => _loadProfile(refresh: true),
+                      onEditTap: () => _openEditProfileDrawer(context),
+                      onAdminTap: () => _openAdminAccess(context),
+                      useRemoteAvatars: widget.useRemoteAvatars,
+                    ),
+                    const SizedBox(height: 40),
+                    const _ProfileSection(title: 'Information'),
+                    _SettingsCard(
                       children: [
                         _SettingsRow(
                           label: 'Email address',
-                          value: 'fgh.jahromi@gmail.com',
-                          action: 'Edit email address',
+                          value: _profile.email,
                         ),
                         _SettingsRow(
-                          label: 'Phone number',
-                          value: '+44 202 777 1111',
-                          action: 'Change number',
+                          label: 'Member since',
+                          value: _formatMemberSince(_profile.createdAt),
                         ),
                         _SettingsRow(
-                          label: 'Password',
-                          value: '@Jha4TGjdl*)wq',
-                          action: 'Change password',
+                          label: 'Account type',
+                          value: _formatRole(_profile.role),
                           showDivider: false,
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 40),
-                  const _ProfileSection(
-                    title: 'Subscription',
-                    child: _SettingsCard(
+                    const SizedBox(height: 40),
+                    const _ProfileSection(title: 'Preferences'),
+                    _SettingsCard(
                       children: [
                         _SettingsRow(
-                          label: 'Your plan',
-                          value: 'Standard \$14.99 mo',
+                          label: 'Favorite genres',
+                          value: _profile.genres.isEmpty
+                              ? 'Not configured'
+                              : _profile.genres.join(', '),
                         ),
                         _SettingsRow(
-                          label: 'Next payment',
-                          value: 'July 12, 2024',
-                          action: 'Cancel',
-                          actionColor: _danger,
-                        ),
-                        _SettingsRow(
-                          label: 'Credit card',
-                          value: '**** **** **** 2137',
+                          label: 'Avatar profile',
+                          value: 'Avatar #${_profile.avatarIndex + 1}',
+                          action: 'Edit profile',
                           showDivider: false,
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 40),
-                  const _ProfileSection(
-                    title: 'Support',
-                    child: _SettingsCard(
+                    const SizedBox(height: 40),
+                    const _ProfileSection(title: 'Support'),
+                    const _SettingsCard(
                       compact: true,
                       children: [
                         _SupportRow(label: 'Support center'),
@@ -139,8 +362,19 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Phone number and password were intentionally removed from this screen because the web profile/settings APIs do not expose those fields.',
+                      style: TextStyle(
+                        color: _muted,
+                        fontSize: 11,
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w400,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -151,9 +385,13 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.onSettingsTap});
+  const _ProfileHeader({
+    required this.onSettingsTap,
+    required this.isRefreshing,
+  });
 
   final VoidCallback onSettingsTap;
+  final bool isRefreshing;
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +411,18 @@ class _ProfileHeader extends StatelessWidget {
             ),
           ),
         ),
+        if (isRefreshing)
+          const Padding(
+            padding: EdgeInsets.only(right: 12),
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white70,
+              ),
+            ),
+          ),
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onSettingsTap,
@@ -202,79 +452,394 @@ class _ProfileHeader extends StatelessWidget {
   }
 }
 
-class _ProfilePeople extends StatelessWidget {
-  const _ProfilePeople({required this.onEditTap});
+class _ProfileSummaryCard extends StatelessWidget {
+  const _ProfileSummaryCard({
+    required this.profile,
+    required this.loading,
+    required this.errorMessage,
+    required this.onRetry,
+    required this.onEditTap,
+    required this.onAdminTap,
+    required this.useRemoteAvatars,
+  });
 
+  final ProfileScreenData profile;
+  final bool loading;
+  final String? errorMessage;
+  final Future<void> Function() onRetry;
   final VoidCallback onEditTap;
+  final VoidCallback onAdminTap;
+  final bool useRemoteAvatars;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+      decoration: ShapeDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_card, Color(0x330D0D0D)],
+        ),
+        shape: RoundedRectangleBorder(
+          side: const BorderSide(color: _border, width: 1),
+          borderRadius: BorderRadius.circular(24),
+        ),
+      ),
+      child: Column(
         children: [
-          _ProfileAvatar(onEditTap: onEditTap),
-          const SizedBox(width: 40),
-          const _AddProfileButton(),
+          _ProfileAvatar(
+            avatarIndex: profile.avatarIndex,
+            isAdmin: profile.role.toLowerCase() == 'admin',
+            useRemoteAvatar: useRemoteAvatars,
+          ),
+          const SizedBox(height: 18),
+          if (loading)
+            const _SummaryLoadingState()
+          else ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    profile.name,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w600,
+                      height: 1.3,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onEditTap,
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(
+                      Icons.edit_outlined,
+                      color: Color(0xFFBDBDBD),
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _maskEmail(profile.email),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w400,
+                height: 1.5,
+              ),
+            ),
+            if (profile.role.toLowerCase() == 'admin') ...[
+              const SizedBox(height: 4),
+              const Text(
+                'Administrador',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w700,
+                  height: 1.4,
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.access_time_rounded,
+                  color: Color(0xFF9E9E9E),
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    'Membro desde ${_formatMemberSince(profile.createdAt)}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Color(0xFF9E9E9E),
+                      fontSize: 13,
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w400,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (profile.genres.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final genre in profile.genres.take(3))
+                    _TagChip(label: genre),
+                ],
+              ),
+            ],
+            const SizedBox(height: 18),
+            _ProfileActionButton(
+              icon: Icons.settings_outlined,
+              label: 'Editar perfil',
+              onTap: onEditTap,
+            ),
+            if (profile.role.toLowerCase() == 'admin') ...[
+              const SizedBox(height: 10),
+              _ProfileActionButton(
+                icon: Icons.shield_outlined,
+                label: 'Acessos administrativos',
+                onTap: onAdminTap,
+              ),
+            ],
+            if (errorMessage != null) ...[
+              const SizedBox(height: 18),
+              _InlineError(message: errorMessage!, onRetry: onRetry),
+            ],
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _SummaryLoadingState extends StatelessWidget {
+  const _SummaryLoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 150,
+          height: 18,
+          decoration: BoxDecoration(
+            color: Colors.white12,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          width: 200,
+          height: 14,
+          decoration: BoxDecoration(
+            color: Colors.white10,
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InlineError extends StatelessWidget {
+  const _InlineError({required this.message, required this.onRetry});
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: const Color(0x14FF4C61),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0x33FF4C61)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: _danger, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w400,
+                height: 1.4,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          TextButton(
+            onPressed: () {
+              onRetry();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              minimumSize: Size.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  const _TagChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 12,
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w500,
+          height: 1.2,
+        ),
       ),
     );
   }
 }
 
 class _ProfileAvatar extends StatelessWidget {
-  const _ProfileAvatar({required this.onEditTap});
+  const _ProfileAvatar({
+    required this.avatarIndex,
+    required this.isAdmin,
+    required this.useRemoteAvatar,
+  });
 
-  final VoidCallback onEditTap;
+  final int avatarIndex;
+  final bool isAdmin;
+  final bool useRemoteAvatar;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 64,
-      child: Column(
+      width: 96,
+      height: 96,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          ClipOval(
-            child: Image.asset(
-              'assets/images/control_profile/images/rectangle-395048-72a84d89.png',
-              width: 64,
-              height: 64,
-              fit: BoxFit.cover,
+          Container(
+            width: 96,
+            height: 96,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: _border, width: 2),
+            ),
+            child: ClipOval(
+              child: AuthenticatedAvatarImage(
+                avatarIndex: avatarIndex,
+                fit: BoxFit.cover,
+                useRemoteAvatar: useRemoteAvatar,
+              ),
             ),
           ),
-          const SizedBox(height: 10),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onEditTap,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Flexible(
-                  child: Text(
-                    'Ryan',
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w500,
-                      height: 1.57,
-                    ),
-                  ),
+          if (isAdmin)
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFC107),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _card, width: 2),
                 ),
-                SizedBox(width: 5),
-                Icon(Icons.edit_outlined, color: Color(0xFF525252), size: 14),
-              ],
+                child: const Icon(
+                  Icons.star,
+                  size: 12,
+                  color: Colors.black,
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 }
 
+class _ProfileActionButton extends StatelessWidget {
+  const _ProfileActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EditProfileDrawer extends StatelessWidget {
-  const _EditProfileDrawer();
+  const _EditProfileDrawer({
+    required this.profile,
+    required this.onSave,
+    required this.useRemoteAvatars,
+  });
+
+  final ProfileScreenData profile;
+  final Future<void> Function(String name, int avatarIndex) onSave;
+  final bool useRemoteAvatars;
 
   @override
   Widget build(BuildContext context) {
@@ -303,7 +868,11 @@ class _EditProfileDrawer extends StatelessWidget {
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(30),
               ),
-              child: const _EditProfileSheetBody(),
+              child: _EditProfileSheetBody(
+                profile: profile,
+                onSave: onSave,
+                useRemoteAvatars: useRemoteAvatars,
+              ),
             ),
           ),
         ],
@@ -313,7 +882,15 @@ class _EditProfileDrawer extends StatelessWidget {
 }
 
 class _EditProfileSheetBody extends StatefulWidget {
-  const _EditProfileSheetBody();
+  const _EditProfileSheetBody({
+    required this.profile,
+    required this.onSave,
+    required this.useRemoteAvatars,
+  });
+
+  final ProfileScreenData profile;
+  final Future<void> Function(String name, int avatarIndex) onSave;
+  final bool useRemoteAvatars;
 
   @override
   State<_EditProfileSheetBody> createState() => _EditProfileSheetBodyState();
@@ -321,18 +898,59 @@ class _EditProfileSheetBody extends StatefulWidget {
 
 class _EditProfileSheetBodyState extends State<_EditProfileSheetBody> {
   late final TextEditingController _nameController;
+  late int _selectedAvatar;
   bool _avatarMenuOpen = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: 'Ryan Clark');
+    _nameController = TextEditingController(text: widget.profile.name);
+    _selectedAvatar = widget.profile.avatarIndex;
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSave() async {
+    if (_isSaving) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      await widget.onSave(_nameController.text, _selectedAvatar);
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(error.message),
+            backgroundColor: const Color(0xFFAD2536),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Não foi possível salvar seu perfil agora.'),
+            backgroundColor: Color(0xFFAD2536),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
@@ -358,17 +976,12 @@ class _EditProfileSheetBodyState extends State<_EditProfileSheetBody> {
           child: Stack(
             children: [
               Padding(
-                padding: EdgeInsets.fromLTRB(
-                  24,
-                  21,
-                  24,
-                  24 + viewInsets.bottom,
-                ),
+                padding: EdgeInsets.fromLTRB(24, 21, 24, 24 + viewInsets.bottom),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final compact = constraints.maxHeight < 690;
-                    final topGap = compact ? 58.0 : 115.0;
-                    final fieldGap = compact ? 40.0 : 75.0;
+                    final topGap = compact ? 50.0 : 96.0;
+                    final fieldGap = compact ? 28.0 : 52.0;
 
                     return SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
@@ -417,6 +1030,8 @@ class _EditProfileSheetBodyState extends State<_EditProfileSheetBody> {
                               ),
                               SizedBox(height: topGap),
                               _EditProfileAvatars(
+                                selectedAvatar: _selectedAvatar,
+                                useRemoteAvatars: widget.useRemoteAvatars,
                                 onCurrentAvatarTap: () {
                                   setState(() => _avatarMenuOpen = true);
                                 },
@@ -426,7 +1041,8 @@ class _EditProfileSheetBodyState extends State<_EditProfileSheetBody> {
                               const Spacer(),
                               const SizedBox(height: 24),
                               _EditProfileActions(
-                                onSave: () => Navigator.of(context).maybePop(),
+                                isSaving: _isSaving,
+                                onSave: _handleSave,
                                 onCancel: () =>
                                     Navigator.of(context).maybePop(),
                               ),
@@ -441,6 +1057,14 @@ class _EditProfileSheetBodyState extends State<_EditProfileSheetBody> {
               if (_avatarMenuOpen)
                 Positioned.fill(
                   child: _EditAvatarOverlay(
+                    selectedAvatar: _selectedAvatar,
+                    useRemoteAvatars: widget.useRemoteAvatars,
+                    onSelect: (avatarIndex) {
+                      setState(() {
+                        _selectedAvatar = avatarIndex;
+                        _avatarMenuOpen = false;
+                      });
+                    },
                     onClose: () => setState(() => _avatarMenuOpen = false),
                   ),
                 ),
@@ -453,12 +1077,20 @@ class _EditProfileSheetBodyState extends State<_EditProfileSheetBody> {
 }
 
 class _EditProfileAvatars extends StatelessWidget {
-  const _EditProfileAvatars({required this.onCurrentAvatarTap});
+  const _EditProfileAvatars({
+    required this.selectedAvatar,
+    required this.useRemoteAvatars,
+    required this.onCurrentAvatarTap,
+  });
 
+  final int selectedAvatar;
+  final bool useRemoteAvatars;
   final VoidCallback onCurrentAvatarTap;
 
   @override
   Widget build(BuildContext context) {
+    final secondaryAvatar = (selectedAvatar + 1) % totalRemoteAvatars;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -469,11 +1101,12 @@ class _EditProfileAvatars extends StatelessWidget {
             alignment: Alignment.center,
             children: [
               ClipOval(
-                child: Image.asset(
-                  'assets/images/control_profile/images/rectangle-395048-72a84d89.png',
+                child: AuthenticatedAvatarImage(
+                  avatarIndex: selectedAvatar,
                   width: 80,
                   height: 80,
                   fit: BoxFit.cover,
+                  useRemoteAvatar: useRemoteAvatars,
                 ),
               ),
               Container(
@@ -494,11 +1127,12 @@ class _EditProfileAvatars extends StatelessWidget {
         ),
         const SizedBox(width: 26),
         ClipOval(
-          child: Image.asset(
-            'assets/images/control_profile/images/rectangle-395048-e2a7c4c6.png',
+          child: AuthenticatedAvatarImage(
+            avatarIndex: secondaryAvatar,
             width: 80,
             height: 80,
             fit: BoxFit.cover,
+            useRemoteAvatar: useRemoteAvatars,
           ),
         ),
       ],
@@ -507,24 +1141,17 @@ class _EditProfileAvatars extends StatelessWidget {
 }
 
 class _EditAvatarOverlay extends StatelessWidget {
-  const _EditAvatarOverlay({required this.onClose});
+  const _EditAvatarOverlay({
+    required this.selectedAvatar,
+    required this.useRemoteAvatars,
+    required this.onSelect,
+    required this.onClose,
+  });
 
+  final int selectedAvatar;
+  final bool useRemoteAvatars;
+  final ValueChanged<int> onSelect;
   final VoidCallback onClose;
-
-  static const _avatarImages = [
-    'assets/images/control_profile/images/rectangle-395048-72a84d89.png',
-    'assets/images/control_profile/images/rectangle-395048-e2a7c4c6.png',
-    'assets/images/control_profile/images/rectangle-395048-4d7c7301.png',
-    'assets/images/control_profile/images/rectangle-395048-e872905c.png',
-    'assets/images/control_profile/images/rectangle-395048-400d326e.png',
-    'assets/mylist/images/image-I63-1778-63-1748.png',
-    'assets/mylist/images/image-I63-1772-63-1748.png',
-    'assets/images/rectangle-395047-d712f5e6.png',
-    'assets/images/rectangle-395047-8b3ec893.png',
-    'assets/images/rectangle-395047-44b1c56e.png',
-    'assets/images/rectangle-395044-cd287cf5.png',
-    'assets/images/rectangle-395045-fc8f71de.png',
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -562,7 +1189,7 @@ class _EditAvatarOverlay extends StatelessWidget {
                 child: GridView.builder(
                   physics: const NeverScrollableScrollPhysics(),
                   padding: EdgeInsets.zero,
-                  itemCount: _avatarImages.length,
+                  itemCount: totalRemoteAvatars,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 4,
                     mainAxisSpacing: 10,
@@ -570,16 +1197,27 @@ class _EditAvatarOverlay extends StatelessWidget {
                     mainAxisExtent: 50,
                   ),
                   itemBuilder: (context, index) {
+                    final active = index == selectedAvatar;
                     return GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: onClose,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: Image.asset(
-                          _avatarImages[index],
-                          width: 50,
-                          height: 50,
-                          fit: BoxFit.cover,
+                      onTap: () => onSelect(index),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: active
+                              ? Border.all(color: Colors.white, width: 2)
+                              : null,
+                        ),
+                        padding: EdgeInsets.all(active ? 2 : 0),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: AuthenticatedAvatarImage(
+                            avatarIndex: index,
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover,
+                            useRemoteAvatar: useRemoteAvatars,
+                          ),
                         ),
                       ),
                     );
@@ -738,17 +1376,26 @@ class _EditNameField extends StatelessWidget {
 }
 
 class _EditProfileActions extends StatelessWidget {
-  const _EditProfileActions({required this.onSave, required this.onCancel});
+  const _EditProfileActions({
+    required this.onSave,
+    required this.onCancel,
+    required this.isSaving,
+  });
 
   final VoidCallback onSave;
   final VoidCallback onCancel;
+  final bool isSaving;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: _DrawerButton(label: 'Save', primary: true, onTap: onSave),
+          child: _DrawerButton(
+            label: isSaving ? 'Saving...' : 'Save',
+            primary: true,
+            onTap: onSave,
+          ),
         ),
         const SizedBox(width: 20),
         Expanded(
@@ -820,73 +1467,25 @@ class _DrawerButton extends StatelessWidget {
   }
 }
 
-class _AddProfileButton extends StatelessWidget {
-  const _AddProfileButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 64,
-      child: Column(
-        children: [
-          Container(
-            width: 64,
-            height: 64,
-            decoration: ShapeDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [_card, Color(0x330D0D0D)],
-              ),
-              shape: RoundedRectangleBorder(
-                side: const BorderSide(color: Color(0xFF2C2C2C), width: 1),
-                borderRadius: BorderRadius.circular(40),
-              ),
-            ),
-            child: const Icon(Icons.add_rounded, color: _muted, size: 30),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Add',
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: _muted,
-              fontSize: 14,
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w500,
-              height: 1.57,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ProfileSection extends StatelessWidget {
-  const _ProfileSection({required this.title, required this.child});
+  const _ProfileSection({required this.title});
 
   final String title;
-  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: _muted,
-            fontSize: 14,
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w500,
-            height: 1.05,
-          ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: _muted,
+          fontSize: 14,
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w500,
+          height: 1.05,
         ),
-        const SizedBox(height: 18),
-        child,
-      ],
+      ),
     );
   }
 }
@@ -923,20 +1522,19 @@ class _SettingsRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.action,
-    this.actionColor = _muted,
     this.showDivider = true,
   });
 
   final String label;
   final String value;
   final String? action;
-  final Color actionColor;
   final bool showDivider;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 60,
+      constraints: const BoxConstraints(minHeight: 60),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: Border(
           bottom: showDivider
@@ -945,12 +1543,11 @@ class _SettingsRow extends StatelessWidget {
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Text(
               label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: _muted,
                 fontSize: 14,
@@ -961,15 +1558,14 @@ class _SettingsRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 14),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 175),
+          Flexible(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
                   value,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.right,
                   style: const TextStyle(
@@ -977,7 +1573,7 @@ class _SettingsRow extends StatelessWidget {
                     fontSize: 14,
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w400,
-                    height: 1.57,
+                    height: 1.4,
                   ),
                 ),
                 if (action != null) ...[
@@ -987,8 +1583,8 @@ class _SettingsRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: actionColor,
+                    style: const TextStyle(
+                      color: _muted,
                       fontSize: 12,
                       fontFamily: 'Inter',
                       fontWeight: FontWeight.w500,
@@ -1048,4 +1644,46 @@ class _SupportRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _maskEmail(String email) {
+  final atIndex = email.indexOf('@');
+  if (atIndex <= 1) return email;
+
+  final prefix = email.substring(0, 2);
+  final domain = email.substring(atIndex);
+  return '$prefix***$domain';
+}
+
+String _formatMemberSince(String? createdAt) {
+  if (createdAt == null || createdAt.isEmpty) return 'Member since unavailable';
+
+  final parsed = DateTime.tryParse(createdAt);
+  if (parsed == null) return 'Member since unavailable';
+
+  const months = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  final month = months[math.max(0, math.min(parsed.month - 1, months.length - 1))];
+  return '$month ${parsed.year}';
+}
+
+String _formatRole(String role) {
+  return switch (role.toLowerCase()) {
+    'admin' => 'Administrator',
+    'client' => 'Client',
+    _ => role,
+  };
 }

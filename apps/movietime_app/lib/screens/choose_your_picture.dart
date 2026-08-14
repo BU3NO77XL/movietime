@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 
+import '../services/avatar_catalog.dart';
+import '../widgets/authenticated_avatar_image.dart';
 import '../widgets/intro_shared.dart';
 import 'choose_your_plan.dart';
 
@@ -23,6 +25,7 @@ class ControlProfile extends StatefulWidget {
 
 class _ControlProfileState extends State<ControlProfile> {
   int _selectedThumb = 0;
+  bool _showAllAvatars = false;
 
   void _goToPlan() {
     Navigator.of(context).push(
@@ -42,14 +45,7 @@ class _ControlProfileState extends State<ControlProfile> {
     );
   }
 
-  // Imagens das miniaturas (ordem da esquerda para a direita no Figma)
-  static const List<String> _thumbImages = [
-    'assets/images/control_profile/images/rectangle-395048-72a84d89.png',
-    'assets/images/control_profile/images/rectangle-395048-4d7c7301.png',
-    'assets/images/control_profile/images/rectangle-395048-400d326e.png',
-    'assets/images/control_profile/images/rectangle-395048-e2a7c4c6.png',
-    'assets/images/control_profile/images/rectangle-395048-e872905c.png',
-  ];
+  static const List<int> _thumbImages = [0, 1, 2, 3, 4];
 
   // Espaçamentos entre as miniaturas (ordem da esquerda para a direita)
   static const List<double> _thumbGaps = [11.427, 13.0, 12.912, 12.522];
@@ -193,8 +189,8 @@ class _ControlProfileState extends State<ControlProfile> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            Image.asset(
-                              _thumbImages[_selectedThumb],
+                            AuthenticatedAvatarImage(
+                              avatarIndex: _selectedThumb,
                               fit: BoxFit.cover,
                             ),
                             // Overlay #0d0d0d 20%
@@ -223,7 +219,7 @@ class _ControlProfileState extends State<ControlProfile> {
                       width: 382.138,
                       height: 93,
                       child: _AvatarCarousel(
-                        images: _thumbImages,
+                        avatarIndexes: _thumbImages,
                         gaps: _thumbGaps,
                         selected: _selectedThumb,
                         onSelect: (index) =>
@@ -248,11 +244,18 @@ class _ControlProfileState extends State<ControlProfile> {
                         color: const Color(0xFF1A1A1A),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          _ModeButton(label: 'Avatar', active: true),
-                          SizedBox(width: 10),
-                          _ModeButton(label: 'Enviar', active: false),
+                          const _ModeButton(label: 'Avatar', active: true),
+                          const SizedBox(width: 10),
+                          GestureDetector(
+                            onTap: () =>
+                                setState(() => _showAllAvatars = true),
+                            child: const _ModeButton(
+                              label: 'Ver todos',
+                              active: false,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -294,6 +297,19 @@ class _ControlProfileState extends State<ControlProfile> {
                     ),
                   ),
                 ),
+                if (_showAllAvatars)
+                  Positioned.fill(
+                    child: _AllAvatarsModal(
+                      selectedAvatar: _selectedThumb,
+                      onClose: () => setState(() => _showAllAvatars = false),
+                      onSelect: (index) {
+                        setState(() {
+                          _selectedThumb = index;
+                          _showAllAvatars = false;
+                        });
+                      },
+                    ),
+                  ),
               ],
             ),
           );
@@ -338,12 +354,12 @@ class _ProgressSegment extends StatelessWidget {
 /// as demais são 64.783×82.366 com opacity 0.5. Raio 10.
 class _Thumb extends StatelessWidget {
   const _Thumb({
-    required this.image,
+    required this.avatarIndex,
     required this.selected,
     required this.onTap,
   });
 
-  final String image;
+  final int avatarIndex;
   final bool selected;
   final VoidCallback onTap;
 
@@ -365,7 +381,10 @@ class _Thumb extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           child: Opacity(
             opacity: selected ? 1.0 : 0.5,
-            child: Image.asset(image, fit: BoxFit.cover),
+            child: AuthenticatedAvatarImage(
+              avatarIndex: avatarIndex,
+              fit: BoxFit.cover,
+            ),
           ),
         ),
       ),
@@ -381,13 +400,13 @@ class _Thumb extends StatelessWidget {
 /// se estendam até a borda da tela sem serem recortados pelo container.
 class _AvatarCarousel extends StatelessWidget {
   const _AvatarCarousel({
-    required this.images,
+    required this.avatarIndexes,
     required this.gaps,
     required this.selected,
     required this.onSelect,
   });
 
-  final List<String> images;
+  final List<int> avatarIndexes;
   final List<double> gaps;
   final int selected;
   final ValueChanged<int> onSelect;
@@ -412,18 +431,19 @@ class _AvatarCarousel extends StatelessWidget {
         left: leadingPadding,
         right: trailingPadding,
       ),
-      itemCount: images.length,
+      itemCount: avatarIndexes.length,
       itemBuilder: (context, index) {
-        final isSelected = index == selected;
+        final avatarIndex = avatarIndexes[index];
+        final isSelected = avatarIndex == selected;
         // Cada item inclui o avatar + o gap seguinte para manter o espaçamento.
         return Row(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _Thumb(
-              image: images[index],
+              avatarIndex: avatarIndex,
               selected: isSelected,
-              onTap: () => onSelect(index),
+              onTap: () => onSelect(avatarIndex),
             ),
             SizedBox(width: gaps[index % gaps.length]),
           ],
@@ -444,7 +464,7 @@ class _ModeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: active ? 74 : 78,
+      width: active ? 74 : 92,
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
@@ -476,6 +496,117 @@ class _ModeButton extends StatelessWidget {
             letterSpacing: 0,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AllAvatarsModal extends StatelessWidget {
+  const _AllAvatarsModal({
+    required this.selectedAvatar,
+    required this.onClose,
+    required this.onSelect,
+  });
+
+  final int selectedAvatar;
+  final VoidCallback onClose;
+  final ValueChanged<int> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onClose,
+              child: Container(color: const Color(0xCC0D0D0D)),
+            ),
+          ),
+          Center(
+            child: Container(
+              width: 330,
+              height: 520,
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A1A),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFF2C2C2C)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Escolha seu avatar',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w600,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: onClose,
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: Color(0xFF9E9E9E),
+                          size: 24,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: GridView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: totalRemoteAvatars,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            mainAxisExtent: 64,
+                          ),
+                      itemBuilder: (context, index) {
+                        final isSelected = index == selectedAvatar;
+                        return GestureDetector(
+                          onTap: () => onSelect(index),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFFA259FF)
+                                    : const Color(0xFF2C2C2C),
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            padding: EdgeInsets.all(isSelected ? 2 : 0),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: AuthenticatedAvatarImage(
+                                avatarIndex: index,
+                                width: 64,
+                                height: 64,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

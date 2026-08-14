@@ -42,17 +42,17 @@ class AuthService {
     return AuthUser.fromJson(data['user'] as Map<String, dynamic>);
   }
 
-  Future<AuthUser> profile(int userId) async {
+  Future<AuthUser> profile([int? userId]) async {
     final data = await _apiClient.getJson(
       '/api/auth/profile',
-      query: {'userId': '$userId'},
+      query: {'userId': userId?.toString()},
     );
 
     return AuthUser.fromJson(data['user'] as Map<String, dynamic>);
   }
 
   Future<AuthUser> updateProfile({
-    required int userId,
+    int? userId,
     required String name,
   }) async {
     final data = await _apiClient.patchJson(

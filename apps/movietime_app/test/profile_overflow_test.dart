@@ -24,6 +24,16 @@ Future<void> loadRealFonts() async {
 }
 
 void main() {
+  const testProfile = ProfileScreenData(
+    id: 7,
+    name: 'Ryan Clark',
+    email: 'ryan.clark@example.com',
+    role: 'client',
+    avatarIndex: 1,
+    genres: ['Action', 'Drama', 'Sci-Fi'],
+    createdAt: '2024-07-12T00:00:00.000Z',
+  );
+
   final sizes = <(String, double, double)>[
     ('design 390x844', 390, 844),
     ('small phone 320x568', 320, 568),
@@ -54,7 +64,14 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: ProfileScreen(
+          initialProfile: testProfile,
+          useRemoteAvatars: false,
+        ),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 500));
 
     while (tester.takeException() != null) {}
@@ -79,8 +96,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.edit_outlined));
     await tester.pumpAndSettle();
 
-    expect(find.text('Edit profile'), findsOneWidget);
-    expect(find.text('Ryan Clark'), findsOneWidget);
+    expect(find.text('Edit profile'), findsWidgets);
+    expect(find.text('Ryan Clark'), findsWidgets);
     expect(find.text('Save'), findsOneWidget);
     expect(find.text('Cancel'), findsWidgets);
   });
@@ -93,7 +110,7 @@ void main() {
     await tester.pumpAndSettle();
 
     while (tester.takeException() != null) {}
-    expect(find.text('Edit profile'), findsOneWidget);
+    expect(find.text('Edit profile'), findsWidgets);
   });
 
   testWidgets('Profile avatar menu opens from edit profile photo', (
@@ -118,7 +135,7 @@ void main() {
     final errors = await pumpAndCollect(tester, 390, 844);
     expect(errors, isEmpty);
 
-    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.tap(find.byIcon(Icons.settings_outlined).first);
     await tester.pumpAndSettle();
 
     expect(find.text('Setting'), findsOneWidget);
