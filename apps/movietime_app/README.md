@@ -2,15 +2,19 @@
 
 Aplicativo Flutter do MovieTime.
 
-Este diretório contém apenas o app mobile/web em Flutter. O backend e a versão web em Next.js ficam fora daqui, em `../movietime_web`.
+Este diretorio contem apenas o app mobile/web em Flutter. O backend e a versao web em Next.js ficam em:
 
-Por padrão, o app consome a API hospedada em:
+```text
+../movietime_web
+```
+
+Por padrao, o app consome a API hospedada em:
 
 ```text
 https://movietimeweb.vercel.app
 ```
 
-Essa URL pode ser trocada sem alterar código usando `--dart-define`.
+Essa URL pode ser trocada sem alterar codigo usando `--dart-define`.
 
 ## Requisitos
 
@@ -30,7 +34,7 @@ Antes de rodar o app, instale:
 https://docs.flutter.dev/get-started/install
 ```
 
-2. Extraia o SDK em uma pasta fixa, por exemplo no Windows:
+2. Extraia o SDK em uma pasta fixa. Exemplo no Windows:
 
 ```text
 C:\src\flutter
@@ -44,21 +48,21 @@ C:\src\flutter\bin
 
 4. Feche e abra o terminal novamente.
 
-5. Confira a instalação:
+5. Confira a instalacao:
 
 ```bash
 flutter doctor
 ```
 
-6. Siga os ajustes indicados pelo `flutter doctor`, principalmente Android SDK, licenças e Chrome.
+6. Siga os ajustes indicados pelo `flutter doctor`, principalmente Android SDK, licencas e Chrome.
 
-Para aceitar licenças Android:
+Para aceitar licencas Android:
 
 ```bash
 flutter doctor --android-licenses
 ```
 
-## Preparar o projeto apos clonar
+## Preparar apos clonar
 
 Na raiz do monorepo:
 
@@ -68,7 +72,7 @@ cd movietime/apps/movietime_app
 flutter pub get
 ```
 
-Confira os dispositivos disponíveis:
+Confira os dispositivos disponiveis:
 
 ```bash
 flutter devices
@@ -79,7 +83,7 @@ flutter devices
 1. Abra o Android Studio.
 2. Abra o Device Manager.
 3. Crie ou inicie um emulador Android.
-4. No terminal:
+4. No terminal, a partir da raiz do monorepo:
 
 ```bash
 cd apps/movietime_app
@@ -93,12 +97,12 @@ flutter devices
 flutter run -d NOME_OU_ID_DO_DISPOSITIVO
 ```
 
-## Rodar em celular físico Android
+## Rodar em celular fisico Android
 
 1. No celular, ative o modo desenvolvedor.
-2. Ative a depuração USB.
+2. Ative a depuracao USB.
 3. Conecte o celular no computador via USB.
-4. Autorize a depuração USB no celular.
+4. Autorize a depuracao USB no celular.
 5. Confira se o Flutter reconheceu:
 
 ```bash
@@ -111,7 +115,7 @@ flutter devices
 flutter run -d NOME_OU_ID_DO_CELULAR
 ```
 
-O app instalado no celular usa a API da Vercel por padrão, então não precisa apontar para `localhost`.
+O app instalado no celular usa a API da Vercel por padrao, entao nao precisa apontar para `localhost`.
 
 ## Rodar no navegador
 
@@ -135,13 +139,13 @@ build/web
 
 ## Configurar URL da API
 
-O app usa a variável de build:
+O app usa a variavel de build:
 
 ```text
 MOVIETIME_API_BASE_URL
 ```
 
-Se ela não for informada, o app usa:
+Se ela nao for informada, o app usa:
 
 ```text
 https://movietimeweb.vercel.app
@@ -181,7 +185,7 @@ sh scripts/build-apk.sh https://sua-api.vercel.app
 sh scripts/build-web.sh https://sua-api.vercel.app
 ```
 
-Se nenhuma URL for passada, os scripts usam a API padrão da Vercel.
+Se nenhuma URL for passada, os scripts usam a API padrao da Vercel.
 
 ### Comandos manuais
 
@@ -205,7 +209,7 @@ flutter build web --dart-define=MOVIETIME_API_BASE_URL=https://sua-api.vercel.ap
 
 ## Usar backend local em vez da Vercel
 
-Normalmente não precisa. O padrão é Vercel.
+Normalmente nao precisa. O padrao e Vercel.
 
 Para testar contra o backend local do `apps/movietime_web`, rode o backend em outro terminal e passe a URL manualmente.
 
@@ -215,7 +219,7 @@ Emulador Android acessando backend local do computador:
 flutter run --dart-define=MOVIETIME_API_BASE_URL=http://10.0.2.2:3000
 ```
 
-Celular físico acessando backend local do computador:
+Celular fisico acessando backend local do computador:
 
 ```bash
 flutter run --dart-define=MOVIETIME_API_BASE_URL=http://SEU_IP_LOCAL:3000
@@ -233,7 +237,7 @@ Web/Desktop acessando backend local:
 flutter run -d chrome --dart-define=MOVIETIME_API_BASE_URL=http://localhost:3000
 ```
 
-## Validar antes de enviar mudanças
+## Validar antes de enviar mudancas
 
 Rode:
 

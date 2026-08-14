@@ -1,99 +1,172 @@
-# SpotFlix
+# MovieTime Web
 
-Plataforma de streaming com recomendações personalizadas usando a API do TMDB.
+Projeto Next.js do MovieTime.
+
+Este diretorio contem:
+
+- site web
+- API routes usadas pelo app Flutter
+- integracao com Supabase
+- proxy/cache para TMDB
 
 ## Requisitos
 
-- **Node.js** >= 18
-- **pnpm** (recomendado) ou npm
+- Node.js 24 recomendado para alinhar com o CI
+- pnpm 11.9.0
+
+Instalar pnpm, caso nao tenha:
 
 ```bash
-# Instalar pnpm globalmente (caso não tenha)
-npm install -g pnpm
+npm install -g pnpm@11.9.0
 ```
 
-## Primeiros passos
+## Preparar apos clonar
+
+Na raiz do monorepo:
 
 ```bash
-# 1. Clonar o repositório
-git clone <url-do-repositorio>
-cd spotflix
-
-# 2. Instalar dependências
+git clone https://github.com/BU3NO77XL/movietime.git
+cd movietime/apps/movietime_web
 pnpm install
+```
 
-# 3. Configurar variáveis de ambiente
+## Variaveis de ambiente
+
+Copie o exemplo:
+
+```bash
 cp .env.example .env
 ```
 
-Edite `.env` e preencha sua chave da TMDB:
+Preencha:
 
-```env
-TMDB_API_KEY=seu_token_aqui
+```text
+TMDB_API_KEY
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
 ```
 
-> Obtenha uma chave gratuita em: https://www.themoviedb.org/settings/api
-
-## Banco de dados
-
-O projeto usa **SQLite** via Prisma. O banco é criado automaticamente na raiz do projeto.
-
-```bash
-# Executar migrations do Prisma
-npx prisma migrate dev
-
-# (Opcional) Popular com dados de exemplo
-pnpm db:seed
-```
-
-> `db:seed` usa o script `db/seed.ts` via `tsx`. As migrations já estão em `prisma/migrations/`.
+Nunca commite `.env`. Ele fica ignorado pelo Git.
 
 ## Desenvolvimento
 
 ```bash
-# Iniciar servidor de desenvolvimento
 pnpm dev
 ```
 
-Acesse http://localhost:3000
+Acesse:
 
-## Build de produção
+```text
+http://localhost:3000
+```
+
+API local:
+
+```text
+http://localhost:3000/api
+```
+
+Exemplo: abrir `/api/auth/login` no navegador retorna `405`, porque essa rota aceita `POST`, nao `GET`.
+
+## Scripts
 
 ```bash
+pnpm dev
 pnpm build
 pnpm start
+pnpm lint
+pnpm typecheck
+pnpm test
 ```
 
-## Scripts disponíveis
+## Rotas principais da API
 
-| Comando | Descrição |
-|---|---|
-| `pnpm dev` | Inicia servidor de desenvolvimento |
-| `pnpm build` | Compila para produção |
-| `pnpm start` | Inicia servidor de produção |
-| `pnpm lint` | Executa ESLint |
-| `pnpm db:init` | Inicializa banco SQLite local |
-| `pnpm db:seed` | Popula banco com dados de exemplo |
-| `npx prisma migrate dev` | Executa migrations do Prisma |
-| `npx prisma studio` | Abre interface gráfica do banco |
+Auth:
 
-## Fluxo completo (primeira vez)
-
-```bash
-pnpm install
-cp .env.example .env
-# Editar .env com TMDB_API_KEY
-npx prisma migrate dev
-pnpm db:seed    # opcional
-pnpm dev
+```text
+POST /api/auth/login
+POST /api/auth/signup
+POST /api/auth/logout
+GET  /api/auth/profile
+PATCH /api/auth/profile
+POST /api/auth/preferences
+POST /api/auth/recommendations
 ```
 
-## Tecnologias
+Usuario/conteudo:
 
-- **Next.js 16** — framework React com App Router
-- **Prisma** — ORM com SQLite
-- **TMDB API** — dados de filmes e séries
-- **TanStack React Query** — cache e estado server-side
-- **Framer Motion** — animações
-- **Tailwind CSS 4** — estilização
-- **Lucide** — ícones
+```text
+GET/POST/DELETE /api/watchlist
+GET/POST/DELETE /api/watch-history
+GET/POST/DELETE /api/ratings
+GET/POST        /api/match
+GET             /api/content/[...path]
+GET             /api/achievements
+POST            /api/achievements/check
+```
+
+As rotas mobile aceitam:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+O fallback por `userId` existe para manter compatibilidade com o fluxo web atual.
+
+## Deploy na Vercel
+
+Ao criar ou ajustar o projeto na Vercel, use:
+
+```text
+Root Directory: apps/movietime_web
+Framework Preset: Next.js
+Install Command: pnpm install
+Build Command: pnpm build
+Output Directory: .next
+```
+
+Configure as variaveis de ambiente na Vercel:
+
+```text
+TMDB_API_KEY
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+Depois disso, pushes na branch `main` fazem deploy automatico do web/API.
+
+## CI
+
+O workflow do GitHub Actions fica na raiz do monorepo:
+
+```text
+.github/workflows/web-ci.yml
+```
+
+Ele roda em mudancas dentro de:
+
+```text
+apps/movietime_web/**
+```
+
+Jobs:
+
+- audit
+- lint
+- typecheck
+- tests
+- build
+
+## Relacao com o Flutter
+
+O app Flutter em `../movietime_app` consome esta API.
+
+Em producao, o Flutter aponta por padrao para:
+
+```text
+https://movietimeweb.vercel.app
+```
+
+Para testar outro backend, use `MOVIETIME_API_BASE_URL` no Flutter.
