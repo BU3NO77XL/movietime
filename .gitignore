@@ -62,6 +62,3 @@ app.*.map.json
 # Local design/debug artifacts
 .tmp_figma/
 .superpowers/
-
-# External web/backend project kept out of the Flutter repo
-spotflix/

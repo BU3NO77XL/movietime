@@ -1,0 +1,57 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { NETFLIX_AVATARS } from '@/lib/avatars';
+import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getProfileIdFromRequest } from '@/lib/session';
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const profileId = await getProfileIdFromRequest(request, body.userId);
+  const { avatarIndex, genres } = body;
+
+  if (
+    !profileId ||
+    avatarIndex == null ||
+    !Array.isArray(genres) ||
+    genres.length < 3
+  ) {
+    return NextResponse.json(
+      { error: 'Dados de preferencias invalidos.' },
+      { status: 400 },
+    );
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('id', profileId)
+    .single();
+
+  if (!profile) {
+    return NextResponse.json(
+      { error: 'Usuario nao encontrado.' },
+      { status: 404 },
+    );
+  }
+
+  const avatarUrl = NETFLIX_AVATARS[Number(avatarIndex)] || null;
+
+  const { data: preferences } = await supabaseAdmin
+    .from('preferences')
+    .upsert(
+      {
+        profile_id: profileId,
+        avatar_index: Number(avatarIndex),
+        genres: genres.join(','),
+      },
+      { onConflict: 'profile_id', ignoreDuplicates: false },
+    )
+    .select()
+    .single();
+
+  await supabaseAdmin
+    .from('profiles')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', profileId);
+
+  return NextResponse.json({ preferences, avatarUrl }, { status: 200 });
+}
