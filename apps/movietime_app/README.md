@@ -10,6 +10,8 @@ Por padrão, o app consome a API hospedada em:
 https://movietimeweb.vercel.app
 ```
 
+Essa URL pode ser trocada sem alterar código usando `--dart-define`.
+
 ## Requisitos
 
 Antes de rodar o app, instale:
@@ -131,11 +133,43 @@ O build fica em:
 build/web
 ```
 
+## Configurar URL da API
+
+O app usa a variável de build:
+
+```text
+MOVIETIME_API_BASE_URL
+```
+
+Se ela não for informada, o app usa:
+
+```text
+https://movietimeweb.vercel.app
+```
+
+Para usar outro deploy da Vercel:
+
+```bash
+flutter run --dart-define=MOVIETIME_API_BASE_URL=https://sua-api.vercel.app
+```
+
+Para gerar APK apontando para outro backend:
+
+```bash
+flutter build apk --dart-define=MOVIETIME_API_BASE_URL=https://sua-api.vercel.app
+```
+
+Para gerar build web apontando para outro backend:
+
+```bash
+flutter build web --dart-define=MOVIETIME_API_BASE_URL=https://sua-api.vercel.app
+```
+
 ## Usar backend local em vez da Vercel
 
 Normalmente não precisa. O padrão é Vercel.
 
-Se quiser testar contra o backend local do `apps/movietime_web`, rode o backend em outro terminal e passe a URL manualmente.
+Para testar contra o backend local do `apps/movietime_web`, rode o backend em outro terminal e passe a URL manualmente.
 
 Emulador Android acessando backend local do computador:
 
