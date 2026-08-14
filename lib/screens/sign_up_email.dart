@@ -4,6 +4,8 @@ import 'package:animations/animations.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../services/api_client.dart';
+import '../services/auth_service.dart';
 import '../widgets/intro_shared.dart';
 import 'recommendation.dart';
 import 'sign_in.dart';
@@ -26,7 +28,10 @@ class _SignUpEmailState extends State<SignUpEmail> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final AuthService _authService = AuthService();
   bool _agreeTerms = false;
+  bool _isSubmitting = false;
+  String? _fieldError;
 
   late final TapGestureRecognizer _goToSignIn = TapGestureRecognizer()
     ..onTap = () {
@@ -61,11 +66,14 @@ class _SignUpEmailState extends State<SignUpEmail> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _authService.close();
     _goToSignIn.dispose();
     super.dispose();
   }
 
-  void _simulateSignUp() {
+  Future<void> _submitSignUp() async {
+    if (_isSubmitting) return;
+
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -84,6 +92,7 @@ class _SignUpEmailState extends State<SignUpEmail> {
     }
 
     if (error != null) {
+      setState(() => _fieldError = error);
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -97,30 +106,67 @@ class _SignUpEmailState extends State<SignUpEmail> {
     }
 
     // Conta simulada criada. Mostra um feedback rápido e segue o fluxo.
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Conta "$name" criada com sucesso!'),
-        backgroundColor: const Color(0xFF2E8B57),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(milliseconds: 1200),
-      ),
-    );
+    setState(() {
+      _isSubmitting = true;
+      _fieldError = null;
+    });
 
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 450),
-        reverseTransitionDuration: const Duration(milliseconds: 450),
-        pageBuilder: (_, _, _) => const ControlRecomendation(),
-        transitionsBuilder: (_, animation, secondaryAnimation, child) {
-          return SharedAxisTransition(
-            animation: animation,
-            secondaryAnimation: secondaryAnimation,
-            transitionType: SharedAxisTransitionType.vertical,
-            child: child,
-          );
-        },
-      ),
-    );
+    try {
+      await _authService.signup(name: name, email: email, password: password);
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Conta "$name" criada com sucesso!'),
+          backgroundColor: const Color(0xFF2E8B57),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1200),
+        ),
+      );
+
+      Navigator.of(context).push(
+        PageRouteBuilder(
+          transitionDuration: const Duration(milliseconds: 450),
+          reverseTransitionDuration: const Duration(milliseconds: 450),
+          pageBuilder: (_, _, _) => const ControlRecomendation(),
+          transitionsBuilder: (_, animation, secondaryAnimation, child) {
+            return SharedAxisTransition(
+              animation: animation,
+              secondaryAnimation: secondaryAnimation,
+              transitionType: SharedAxisTransitionType.vertical,
+              child: child,
+            );
+          },
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _fieldError = error.message);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(error.message),
+            backgroundColor: const Color(0xFFAD2536),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } catch (_) {
+      if (!mounted) return;
+      const message = 'Não foi possível criar a conta agora.';
+      setState(() => _fieldError = message);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(message),
+            backgroundColor: Color(0xFFAD2536),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -132,200 +178,208 @@ class _SignUpEmailState extends State<SignUpEmail> {
         resizeToAvoidBottomInset: false,
         body: SafeArea(
           child: LayoutBuilder(
-          builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, constraints.maxHeight);
-          final transform = DesignTransform.fromSize(size);
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, constraints.maxHeight);
+              final transform = DesignTransform.fromSize(size);
 
-          return SizedBox(
-            width: size.width,
-            height: size.height,
-            child: Stack(
-              fit: StackFit.expand,
-              clipBehavior: Clip.none,
-              children: [
-                // Fundo preto base
-                const ColoredBox(color: Color(0xFF0D0D0D)),
+              return SizedBox(
+                width: size.width,
+                height: size.height,
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Fundo preto base
+                    const ColoredBox(color: Color(0xFF0D0D0D)),
 
-                // Glow roxo (Ellipse 1500, x=-145, y=-155, blur 300, roxo 20%)
-                Positioned(
-                  left: transform.mapX(-145),
-                  top: transform.mapY(-155),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                      child: Container(
-                        width: 350,
-                        height: 350,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0x33A259FF), // #a259ff 20%
+                    // Glow roxo (Ellipse 1500, x=-145, y=-155, blur 300, roxo 20%)
+                    Positioned(
+                      left: transform.mapX(-145),
+                      top: transform.mapY(-155),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 300,
+                            sigmaY: 300,
+                          ),
+                          child: Container(
+                            width: 350,
+                            height: 350,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0x33A259FF), // #a259ff 20%
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Glow ciano (Ellipse 1501, x=138, y=580, blur 300, ciano 10%)
-                Positioned(
-                  left: transform.mapX(138),
-                  top: transform.mapY(580),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                      child: Container(
-                        width: 350,
-                        height: 350,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0x1A5CE1E6), // #5ce1e6 10%
+                    // Glow ciano (Ellipse 1501, x=138, y=580, blur 300, ciano 10%)
+                    Positioned(
+                      left: transform.mapX(138),
+                      top: transform.mapY(580),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 300,
+                            sigmaY: 300,
+                          ),
+                          child: Container(
+                            width: 350,
+                            height: 350,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0x1A5CE1E6), // #5ce1e6 10%
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Título central (x=95, y=171.465, 200×61)
-                Positioned(
-                  left: transform.mapX(95),
-                  top: transform.mapY(171.465),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: const SizedBox(
-                      width: 200,
-                      child: Column(
-                        children: [
-                          Text(
-                            'Cadastre-se com e-mail',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w600,
-                              height: 1.4167, // 34/24
-                              letterSpacing: 0,
-                            ),
+                    // Título central (x=95, y=171.465, 200×61)
+                    Positioned(
+                      left: transform.mapX(95),
+                      top: transform.mapY(171.465),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: const SizedBox(
+                          width: 200,
+                          child: Column(
+                            children: [
+                              Text(
+                                'Cadastre-se com e-mail',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.4167, // 34/24
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              Text(
+                                'Crie sua conta com e-mail',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFF9E9E9E),
+                                  fontSize: 14,
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.5714, // 22/14
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ],
                           ),
-                          SizedBox(height: 5),
-                          Text(
-                            'Crie sua conta com e-mail',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Color(0xFF9E9E9E),
-                              fontSize: 14,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w400,
-                              height: 1.5714, // 22/14
-                              letterSpacing: 0,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Formulário (x=24, y=287, 342×347)
-                Positioned(
-                  left: transform.mapX(24),
-                  top: transform.mapY(287),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: SizedBox(
-                      width: 342,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Campos
-                          SizedBox(
-                            width: 342,
-                            child: Column(
-                              children: [
-                                _InputField(
-                                  label: 'Nome completo',
-                                  controller: _nameController,
+                    // Formulário (x=24, y=287, 342×347)
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(287),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: 342,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Campos
+                              SizedBox(
+                                width: 342,
+                                child: Column(
+                                  children: [
+                                    _InputField(
+                                      label: 'Nome completo',
+                                      controller: _nameController,
+                                    ),
+                                    SizedBox(height: 15),
+                                    _InputField(
+                                      label: 'Ex.: email@example.com',
+                                      controller: _emailController,
+                                      error: _fieldError != null,
+                                      errorText: _fieldError,
+                                    ),
+                                    SizedBox(height: 15),
+                                    _PasswordField(
+                                      controller: _passwordController,
+                                      error: _fieldError != null,
+                                    ),
+                                    SizedBox(height: 15),
+                                    _TermsCheckbox(
+                                      checked: _agreeTerms,
+                                      onChanged: (value) =>
+                                          setState(() => _agreeTerms = value),
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(height: 15),
-                                _InputField(
-                                  label: 'Ex.: email@example.com',
-                                  controller: _emailController,
-                                  error: true,
-                                  errorText:
-                                      'O endereço de e-mail está incorreto.',
-                                ),
-                                SizedBox(height: 15),
-                                _PasswordField(
-                                  controller: _passwordController,
-                                  error: true,
-                                ),
-                                SizedBox(height: 15),
-                                _TermsCheckbox(
-                                  checked: _agreeTerms,
-                                  onChanged: (value) =>
-                                      setState(() => _agreeTerms = value),
-                                ),
-                              ],
-                            ),
+                              ),
+                              SizedBox(height: 40),
+                              // Botão Sign up (342×50)
+                              _SignUpButton(
+                                isLoading: _isSubmitting,
+                                onTap: _submitSignUp,
+                              ),
+                            ],
                           ),
-                          SizedBox(height: 40),
-                          // Botão Sign up (342×50)
-                          _SignUpButton(onTap: _simulateSignUp),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
 
-                // "Already have an account? Sign In" (y=774, centralizado)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: transform.mapY(774),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topCenter,
-                    child: Text.rich(
-                      textAlign: TextAlign.center,
-                      TextSpan(
-                        children: [
-                          const TextSpan(
-                            text: 'Já tem uma conta? ',
-                            style: TextStyle(
-                              color: Color(0xFF525252),
-                              fontSize: 14,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w500,
-                              height: 1.5714, // 22/14
-                              letterSpacing: 0,
-                            ),
-                          ),
+                    // "Already have an account? Sign In" (y=774, centralizado)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: transform.mapY(774),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topCenter,
+                        child: Text.rich(
+                          textAlign: TextAlign.center,
                           TextSpan(
-                            text: 'Entrar',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w500,
-                              height: 1.5714, // 22/14
-                              letterSpacing: 0,
-                            ),
-                            recognizer: _goToSignIn,
+                            children: [
+                              const TextSpan(
+                                text: 'Já tem uma conta? ',
+                                style: TextStyle(
+                                  color: Color(0xFF525252),
+                                  fontSize: 14,
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.5714, // 22/14
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                              TextSpan(
+                                text: 'Entrar',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.5714, // 22/14
+                                  letterSpacing: 0,
+                                ),
+                                recognizer: _goToSignIn,
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
+              );
+            },
           ),
         ),
       ),
@@ -562,8 +616,9 @@ class _TermsCheckbox extends StatelessWidget {
 
 /// Botão "Sign up" com gradiente roxo e sombra.
 class _SignUpButton extends StatelessWidget {
-  const _SignUpButton({this.onTap});
+  const _SignUpButton({required this.isLoading, this.onTap});
 
+  final bool isLoading;
   final VoidCallback? onTap;
 
   @override
@@ -590,20 +645,29 @@ class _SignUpButton extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onTap,
+          onTap: isLoading ? null : onTap,
           borderRadius: BorderRadius.circular(40),
-          child: const Center(
-            child: Text(
-              'Cadastre-se',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                height: 1.5714, // 22/14
-                letterSpacing: 0,
-              ),
-            ),
+          child: Center(
+            child: isLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Cadastre-se',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w500,
+                      height: 1.5714, // 22/14
+                      letterSpacing: 0,
+                    ),
+                  ),
           ),
         ),
       ),
