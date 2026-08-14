@@ -39,6 +39,7 @@ dependencies:
   motion_blur: ^0.0.2
   animations: ^2.2.0
   dotlottie_flutter: ^0.1.5
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
