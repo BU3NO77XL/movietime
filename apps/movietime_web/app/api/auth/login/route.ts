@@ -42,12 +42,15 @@ export async function POST(request: NextRequest) {
       name: profile.full_name,
       role: profile.role,
       avatarUrl: profile.avatar_url,
+      createdAt: profile.created_at,
       preferences: profile.preferences
         ? {
             avatarIndex: profile.preferences.avatar_index,
             genres: profile.preferences.genres
               ? profile.preferences.genres.split(',')
               : [],
+            recommendationsUpdatedAt:
+              profile.preferences.recommendations_updated_at || null,
           }
         : null,
     },

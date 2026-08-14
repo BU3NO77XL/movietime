@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
         email: profile.email,
         role: profile.role,
         avatarUrl: profile.avatar_url,
+        createdAt: profile.created_at,
         preferences: null,
       },
       session: {
