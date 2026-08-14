@@ -66,7 +66,6 @@ export default function TrailerBackdrop({
       }
       onPlayingChange?.(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [youtubeKey, startDelayMs]);
 
   useEffect(() => {

@@ -91,7 +91,6 @@ export default function HeroSection({ featuredMovies, onWatch, onMoreInfo, top10
         };
 
         prefetchAssets();
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot estável do hero
     }, [heroMovies]);
 
     // 2. Exibe o primeiro filme assim que o snapshot estiver pronto

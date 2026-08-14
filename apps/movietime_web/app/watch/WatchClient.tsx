@@ -372,11 +372,14 @@ function WatchContent() {
         staleTime: 60_000,
     });
 
+    const movieTmdbId = movie?.tmdb_id;
+    const movieType = movie?.type;
+
     const savedHistory = useMemo(() => {
-        if (!movie?.tmdb_id || movie.type !== 'series' || !historyPayload?.items?.length) return null;
-        const tmdbIdNum = Number(movie.tmdb_id);
+        if (!movieTmdbId || movieType !== 'series' || !historyPayload?.items?.length) return null;
+        const tmdbIdNum = Number(movieTmdbId);
         const match = (historyPayload.items as Array<Record<string, unknown>>).find(
-            (i) => Number(i.tmdb_id) === tmdbIdNum && i.media_type === movie.type,
+            (i) => Number(i.tmdb_id) === tmdbIdNum && i.media_type === movieType,
         );
         if (!match) return null;
         const seasonNum = Number(match.season_number ?? match.seasonNumber ?? 0);
@@ -385,7 +388,7 @@ function WatchContent() {
             return { seasonNumber: seasonNum, episodeNumber: episodeNum };
         }
         return null;
-    }, [historyPayload, movie?.tmdb_id, movie?.type]);
+    }, [historyPayload, movieTmdbId, movieType]);
 
     // Pronto para decidir Assistir vs Continua (sem flash)
     const historyReady = !userId || movie?.type !== 'series' || historyFetched;
