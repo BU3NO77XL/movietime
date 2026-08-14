@@ -6,7 +6,9 @@ import FlutterMacOS
 import Foundation
 
 import dotlottie_flutter
+import flutter_secure_storage_darwin
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   DotLottieFlutterPlugin.register(with: registry.registrar(forPlugin: "DotLottieFlutterPlugin"))
+  FlutterSecureStorageDarwinPlugin.register(with: registry.registrar(forPlugin: "FlutterSecureStorageDarwinPlugin"))
 }

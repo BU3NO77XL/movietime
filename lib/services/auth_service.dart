@@ -1,10 +1,19 @@
 import 'api_client.dart';
 import 'auth_models.dart';
+import 'session_store.dart';
 
 class AuthService {
-  AuthService({ApiClient? apiClient}) : _apiClient = apiClient ?? ApiClient();
+  AuthService({ApiClient? apiClient, SessionStore? sessionStore})
+    : _sessionStore = sessionStore ?? const SessionStore(),
+      _apiClient =
+          apiClient ??
+          ApiClient(
+            accessTokenProvider:
+                (sessionStore ?? const SessionStore()).accessToken,
+          );
 
   final ApiClient _apiClient;
+  final SessionStore _sessionStore;
 
   Future<AuthUser> login({
     required String email,
@@ -15,6 +24,7 @@ class AuthService {
       body: {'email': email, 'password': password},
     );
 
+    await _saveSession(data);
     return AuthUser.fromJson(data['user'] as Map<String, dynamic>);
   }
 
@@ -28,6 +38,7 @@ class AuthService {
       body: {'name': name, 'email': email, 'password': password},
     );
 
+    await _saveSession(data);
     return AuthUser.fromJson(data['user'] as Map<String, dynamic>);
   }
 
@@ -61,6 +72,22 @@ class AuthService {
       '/api/auth/preferences',
       body: {'userId': userId, 'avatarIndex': avatarIndex, 'genres': genres},
     );
+  }
+
+  Future<void> logout() async {
+    try {
+      await _apiClient.postJson('/api/auth/logout');
+    } finally {
+      await _sessionStore.clear();
+    }
+  }
+
+  Future<void> _saveSession(Map<String, dynamic> data) async {
+    final sessionJson = data['session'];
+    if (sessionJson is! Map<String, dynamic>) return;
+
+    final session = AuthSession.fromJson(sessionJson);
+    if (session.isValid) await _sessionStore.save(session);
   }
 
   void close() => _apiClient.close();

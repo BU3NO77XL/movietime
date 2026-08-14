@@ -1,9 +1,15 @@
 import 'api_client.dart';
 import 'content_models.dart';
+import 'session_store.dart';
 
 class ContentService {
-  ContentService({ApiClient? apiClient})
-    : _apiClient = apiClient ?? ApiClient();
+  ContentService({ApiClient? apiClient, SessionStore? sessionStore})
+    : _apiClient =
+          apiClient ??
+          ApiClient(
+            accessTokenProvider:
+                (sessionStore ?? const SessionStore()).accessToken,
+          );
 
   final ApiClient _apiClient;
 

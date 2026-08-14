@@ -15,12 +15,18 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient({http.Client? httpClient, String? baseUrl})
-    : _httpClient = httpClient ?? http.Client(),
-      _baseUri = Uri.parse(baseUrl ?? ApiConfig.baseUrl);
+  ApiClient({
+    http.Client? httpClient,
+    String? baseUrl,
+    Future<String?> Function()? accessTokenProvider,
+  }) : _httpClient = httpClient ?? http.Client(),
+       _baseUri = Uri.parse(baseUrl ?? ApiConfig.baseUrl),
+       // ignore: prefer_initializing_formals
+       _accessTokenProvider = accessTokenProvider;
 
   final http.Client _httpClient;
   final Uri _baseUri;
+  final Future<String?> Function()? _accessTokenProvider;
 
   Future<Map<String, dynamic>> getJson(
     String path, {
@@ -59,6 +65,11 @@ class ApiClient {
     final uri = _resolve(path, query);
     final request = http.Request(method, uri)
       ..headers.addAll({'Accept': 'application/json'});
+
+    final accessToken = await _accessTokenProvider?.call();
+    if (accessToken != null && accessToken.isNotEmpty) {
+      request.headers['Authorization'] = 'Bearer $accessToken';
+    }
 
     if (body != null) {
       request.headers['Content-Type'] = 'application/json';
