@@ -1,17 +1,14 @@
-# appflutter
+# MovieTime
 
-A new Flutter project.
+Monorepo local do MovieTime.
 
-## Getting Started
+- `movietime_app/`: aplicativo Flutter.
+- `spotflix/`: projeto web/backend Next.js usado pela API hospedada na Vercel.
 
-This project is a starting point for a Flutter application.
+O app Flutter consome a API em `https://movietimeweb.vercel.app` por padrao. Para rodar o app:
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+cd movietime_app
+flutter pub get
+flutter run
+```
