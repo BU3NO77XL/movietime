@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 class ApiConfig {
   const ApiConfig._();
 
@@ -9,12 +7,7 @@ class ApiConfig {
 
   static String get baseUrl {
     if (_definedBaseUrl.isNotEmpty) return _trimTrailingSlash(_definedBaseUrl);
-    if (kIsWeb) return 'http://localhost:3000';
-
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.android => 'http://10.0.2.2:3000',
-      _ => 'http://localhost:3000',
-    };
+    return 'https://movietimeweb.vercel.app';
   }
 
   static String _trimTrailingSlash(String value) {
