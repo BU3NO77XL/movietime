@@ -62,7 +62,7 @@ Na raiz do monorepo:
 
 ```bash
 git clone https://github.com/BU3NO77XL/movietime.git
-cd movietime/movietime_app
+cd movietime/apps/movietime_app
 flutter pub get
 ```
 
@@ -80,7 +80,7 @@ flutter devices
 4. No terminal:
 
 ```bash
-cd movietime_app
+cd apps/movietime_app
 flutter run
 ```
 
@@ -135,7 +135,7 @@ build/web
 
 Normalmente não precisa. O padrão é Vercel.
 
-Se quiser testar contra o backend local do `movietime_web`, rode o backend em outro terminal e passe a URL manualmente.
+Se quiser testar contra o backend local do `apps/movietime_web`, rode o backend em outro terminal e passe a URL manualmente.
 
 Emulador Android acessando backend local do computador:
 
