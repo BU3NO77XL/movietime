@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "cd apps/movietime_web && corepack enable && pnpm install --frozen-lockfile",
-  "buildCommand": "cd apps/movietime_web && pnpm build",
+  "installCommand": "if [ -d apps/movietime_web ]; then cd apps/movietime_web; fi && corepack enable && pnpm install --frozen-lockfile",
+  "buildCommand": "if [ -d apps/movietime_web ]; then cd apps/movietime_web; fi && pnpm build",
   "framework": "nextjs",
   "headers": [
     {
