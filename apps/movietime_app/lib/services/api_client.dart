@@ -76,13 +76,19 @@ class ApiClient {
       request.body = jsonEncode(body);
     }
 
-    final streamed = await _httpClient.send(request);
-    final response = await http.Response.fromStream(streamed);
+    http.Response response;
+    try {
+      final streamed = await _httpClient.send(request);
+      response = await http.Response.fromStream(streamed);
+    } on Exception {
+      throw const ApiException('Erro na comunicação com o servidor.');
+    }
+
     final decoded = _decodeResponse(response);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(
-        decoded['error']?.toString() ?? 'Erro ao comunicar com o servidor.',
+        _resolveErrorMessage(path, response.statusCode, decoded),
         statusCode: response.statusCode,
       );
     }
@@ -107,13 +113,88 @@ class ApiClient {
   Map<String, dynamic> _decodeResponse(http.Response response) {
     if (response.body.isEmpty) return <String, dynamic>{};
 
-    final decoded = jsonDecode(response.body);
-    if (decoded is Map<String, dynamic>) return decoded;
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } on FormatException {
+      if (response.statusCode >= 400) {
+        return const <String, dynamic>{};
+      }
+
+      throw ApiException(
+        'Resposta inesperada do servidor.',
+        statusCode: response.statusCode,
+      );
+    }
 
     throw ApiException(
       'Resposta inesperada do servidor.',
       statusCode: response.statusCode,
     );
+  }
+
+  String _resolveErrorMessage(
+    String path,
+    int statusCode,
+    Map<String, dynamic> decoded,
+  ) {
+    if (_shouldSanitizeServerError(path, statusCode)) {
+      return 'Erro na comunicação com o servidor.';
+    }
+
+    final error = decoded['error']?.toString().trim();
+    if (error != null && error.isNotEmpty) {
+      return _sanitizeBackendMessage(error, path, statusCode);
+    }
+
+    return 'Erro na comunicação com o servidor.';
+  }
+
+  bool _shouldSanitizeServerError(String path, int statusCode) {
+    if (statusCode >= 500) {
+      return true;
+    }
+
+    if (statusCode == 404 && path.startsWith('/api/')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  String _sanitizeBackendMessage(String message, String path, int statusCode) {
+    final normalized = message.trim();
+    final lowered = normalized.toLowerCase();
+
+    if (_shouldSanitizeServerError(path, statusCode)) {
+      return 'Erro na comunicação com o servidor.';
+    }
+
+    const deployMarkers = <String>[
+      '<!doctype html',
+      '<html',
+      'vercel',
+      'deployment',
+      'deploy',
+      'cannot get ',
+      'route not found',
+      'not found',
+      'function_invocation_failed',
+      'internal server error',
+      'unexpected token <',
+    ];
+
+    for (final marker in deployMarkers) {
+      if (lowered.contains(marker)) {
+        return 'Erro na comunicação com o servidor.';
+      }
+    }
+
+    if (normalized.length > 180) {
+      return 'Erro na comunicação com o servidor.';
+    }
+
+    return normalized;
   }
 
   void close() => _httpClient.close();
