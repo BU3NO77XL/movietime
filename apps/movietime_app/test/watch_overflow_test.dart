@@ -1,4 +1,3 @@
-import 'package:appflutter/screens/my_list_state.dart';
 import 'package:appflutter/screens/watch.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,9 +12,6 @@ void main() {
   }
 
   tearDown(() {
-    MyListState.hasCreatedList = false;
-    MyListState.listName = MyListState.defaultName;
-
     final view =
         TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
     view.resetPhysicalSize();
@@ -37,20 +33,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Watch save button toggles filled bookmark', (tester) async {
+  testWidgets('Watch save button shows auth feedback when user is anonymous', (
+    tester,
+  ) async {
     await pumpAtSize(tester, const Size(390, 844));
 
     expect(find.byIcon(Icons.bookmark_rounded), findsNothing);
     await tester.tap(find.byKey(const ValueKey('watch-save-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Give your new list a name'), findsOneWidget);
-    expect(find.text(MyListState.defaultName), findsOneWidget);
-
-    await tester.tap(find.text('Create'));
-    await tester.pumpAndSettle();
-
-    expect(find.byIcon(Icons.bookmark_rounded), findsOneWidget);
+    expect(find.text('Faça login para salvar na sua lista.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

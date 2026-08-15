@@ -1,3 +1,23 @@
+class WatchlistResponse {
+  const WatchlistResponse({this.listName, this.items = const []});
+
+  factory WatchlistResponse.fromJson(Map<String, dynamic> json) {
+    return WatchlistResponse(
+      listName: json['listName']?.toString(),
+      items: switch (json['items']) {
+        final List<dynamic> value => [
+          for (final item in value)
+            if (item is Map<String, dynamic>) WatchlistItem.fromJson(item),
+        ],
+        _ => const [],
+      },
+    );
+  }
+
+  final String? listName;
+  final List<WatchlistItem> items;
+}
+
 class WatchlistItem {
   const WatchlistItem({
     required this.tmdbId,

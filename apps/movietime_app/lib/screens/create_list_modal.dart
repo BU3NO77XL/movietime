@@ -2,18 +2,23 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import 'my_list_state.dart';
+const kDefaultListName = 'Must watch';
 
-Future<String?> showCreateListModal(BuildContext context) {
+Future<String?> showCreateListModal(
+  BuildContext context, {
+  String? initialName,
+}) {
   return showDialog<String>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.52),
-    builder: (_) => const _CreateListDialog(),
+    builder: (_) => _CreateListDialog(initialName: initialName),
   );
 }
 
 class _CreateListDialog extends StatefulWidget {
-  const _CreateListDialog();
+  const _CreateListDialog({this.initialName});
+
+  final String? initialName;
 
   @override
   State<_CreateListDialog> createState() => _CreateListDialogState();
@@ -25,7 +30,11 @@ class _CreateListDialogState extends State<_CreateListDialog> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: MyListState.listName);
+    _controller = TextEditingController(
+      text: widget.initialName?.trim().isNotEmpty == true
+          ? widget.initialName!.trim()
+          : kDefaultListName,
+    );
   }
 
   @override
@@ -36,7 +45,7 @@ class _CreateListDialogState extends State<_CreateListDialog> {
 
   void _create() {
     final name = _controller.text.trim().isEmpty
-        ? MyListState.defaultName
+        ? kDefaultListName
         : _controller.text.trim();
     Navigator.of(context).pop(name);
   }
@@ -78,7 +87,7 @@ class _CreateListDialogState extends State<_CreateListDialog> {
                 ),
                 const SizedBox(height: 15),
                 const Text(
-                  'Give your new list a name',
+                  'Dê um nome para sua lista',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Color(0xFF9E9E9E),
@@ -151,7 +160,7 @@ class _CreateListDialogState extends State<_CreateListDialog> {
                     child: const Center(
                       widthFactor: 1,
                       child: Text(
-                        'Create',
+                        'Salvar',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,

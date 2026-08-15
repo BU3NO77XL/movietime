@@ -2,12 +2,48 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../services/api_client.dart';
+import '../services/auth_service.dart';
+import '../services/content_models.dart';
+import '../services/content_service.dart';
 import 'create_list_modal.dart';
-import 'my_list_state.dart';
 
 class WatchScreen extends StatefulWidget {
-  const WatchScreen({super.key});
+  const WatchScreen({
+    super.key,
+    this.tmdbId = 335984,
+    this.mediaType = 'movie',
+    this.title = 'Blade Runner 2049',
+    this.posterUrl,
+    this.backdropUrl,
+    this.overview,
+    this.seasonNumber = 1,
+    this.episodeNumber = 1,
+  });
+
+  factory WatchScreen.fromWatchlist(WatchlistItem item) {
+    return WatchScreen(
+      tmdbId: item.tmdbId,
+      mediaType: item.mediaType,
+      title: item.title,
+      posterUrl: item.posterUrl,
+      backdropUrl: item.backdropUrl,
+    );
+  }
+
+  factory WatchScreen.fromHistory(WatchHistoryItem item) {
+    return WatchScreen(
+      tmdbId: item.tmdbId,
+      mediaType: item.mediaType,
+      title: item.title,
+      posterUrl: item.posterUrl,
+      backdropUrl: item.backdropUrl,
+      seasonNumber: item.seasonNumber > 0 ? item.seasonNumber : 1,
+      episodeNumber: item.episodeNumber > 0 ? item.episodeNumber : 1,
+    );
+  }
 
   static const _bg = Color(0xFF0D0D0D);
   static const _secondary = Color(0xFF1A1A1A);
@@ -21,16 +57,42 @@ class WatchScreen extends StatefulWidget {
   // ignore: unused_field
   static const _primary = Color(0xFFA259FF);
 
+  final int tmdbId;
+  final String mediaType;
+  final String title;
+  final String? posterUrl;
+  final String? backdropUrl;
+  final String? overview;
+  final int seasonNumber;
+  final int episodeNumber;
+
   @override
   State<WatchScreen> createState() => _WatchScreenState();
 }
 
 class _WatchScreenState extends State<WatchScreen> {
+  final AuthService _authService = AuthService();
+  final ContentService _contentService = ContentService();
+
   bool _isSaved = false;
   bool _isInMyList = false;
   bool _showRatingBadge = false;
   String? _selectedRating;
   String _selectedWatchTab = 'Episodes';
+  bool _isSyncing = false;
+  int? _userId;
+  String? _userName;
+  String? _listName;
+  String? _interactionError;
+  _WatchContentDetails? _details;
+  int _selectedSeason = 1;
+  int _selectedEpisode = 1;
+  bool _isLoadingSeason = false;
+  String? _seasonError;
+  _SeasonDetails? _seasonDetails;
+  List<_CastPerson> _cast = const [];
+  List<_RelatedWatchItem> _collectionItems = const [];
+  List<_RelatedWatchItem> _similarItems = const [];
   final ScrollController _pageScrollController = ScrollController();
   final ScrollController _watchTabController = ScrollController();
   final GlobalKey _topCastKey = GlobalKey();
@@ -47,6 +109,10 @@ class _WatchScreenState extends State<WatchScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedSeason = widget.seasonNumber;
+    _selectedEpisode = widget.episodeNumber;
+    _loadUserState();
+    _loadContentDetails();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollWatchTabIntoView(_selectedWatchTab, jump: true);
     });
@@ -54,6 +120,8 @@ class _WatchScreenState extends State<WatchScreen> {
 
   @override
   void dispose() {
+    _authService.close();
+    _contentService.close();
     _ratingBadgeOverlay?.remove();
     _ratingBadgeOverlay = null;
     _pageScrollController.dispose();
@@ -105,6 +173,173 @@ class _WatchScreenState extends State<WatchScreen> {
     Overlay.of(context).insert(_ratingBadgeOverlay!);
   }
 
+  Future<void> _loadUserState() async {
+    try {
+      final user = await _authService.profile();
+      final watchlist = await _contentService.watchlistData(user.id);
+      final ratings = await _contentService.ratings(user.id);
+      final history = _isSeries
+          ? await _contentService.watchHistoryForItem(
+              user.id,
+              tmdbId: widget.tmdbId,
+              mediaType: _normalizedMediaType,
+            )
+          : const <WatchHistoryItem>[];
+      final key = '${widget.tmdbId}_$_normalizedMediaType';
+      final savedHistory = history.isNotEmpty ? history.first : null;
+
+      if (!mounted) return;
+      setState(() {
+        _userId = user.id;
+        _userName = user.name;
+        _listName = watchlist.listName ?? user.listName;
+        _isInMyList = watchlist.items.any(
+          (item) =>
+              item.tmdbId == widget.tmdbId &&
+              item.mediaType == _normalizedMediaType,
+        );
+        _isSaved = _isInMyList;
+        _selectedRating = _ratingLabelFromApi(ratings[key]);
+        if (savedHistory != null) {
+          _selectedSeason = savedHistory.seasonNumber > 0
+              ? savedHistory.seasonNumber
+              : _selectedSeason;
+          _selectedEpisode = savedHistory.episodeNumber > 0
+              ? savedHistory.episodeNumber
+              : _selectedEpisode;
+        }
+        _interactionError = null;
+      });
+    } on ApiException {
+      if (!mounted) return;
+      setState(() => _interactionError = null);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _interactionError = null);
+    }
+  }
+
+  Future<void> _loadContentDetails() async {
+    try {
+      final endpoint = _isSeries ? 'tv/${widget.tmdbId}' : 'movie/${widget.tmdbId}';
+      final responses = await Future.wait([
+        _contentService.tmdb(endpoint, query: const {'language': 'pt-BR'}),
+        _contentService.tmdb(
+          '$endpoint/credits',
+          query: const {'language': 'pt-BR'},
+        ),
+        _contentService.tmdb(
+          '$endpoint/similar',
+          query: const {'language': 'pt-BR', 'page': '1'},
+        ),
+      ]);
+      final data = responses[0];
+      final credits = responses[1];
+      final similar = responses[2];
+      final nextDetails = _WatchContentDetails.fromJson(
+        data,
+        mediaType: _normalizedMediaType,
+        fallbackTitle: widget.title,
+        fallbackPosterUrl: widget.posterUrl,
+        fallbackBackdropUrl: widget.backdropUrl,
+        fallbackOverview: widget.overview,
+      );
+      if (!mounted) return;
+      setState(() {
+        _details = nextDetails;
+        _cast = _parseCast(credits);
+        _similarItems = _parseRelatedItems(similar, _normalizedMediaType);
+        if (_isSeries) {
+          final validSeasons = nextDetails.seasons
+              .where((season) => season.seasonNumber > 0)
+              .toList();
+          if (validSeasons.isNotEmpty) {
+            final hasSelectedSeason = validSeasons.any(
+              (season) => season.seasonNumber == _selectedSeason,
+            );
+            if (!hasSelectedSeason) {
+              _selectedSeason = validSeasons.first.seasonNumber;
+            }
+          }
+        }
+      });
+      if (!_isSeries && nextDetails.collectionId != null) {
+        try {
+          final collectionData = await _contentService.tmdb(
+            'collection/${nextDetails.collectionId}',
+            query: const {'language': 'pt-BR'},
+          );
+          if (!mounted) return;
+          setState(() {
+            _collectionItems = _parseCollectionItems(collectionData);
+          });
+        } catch (_) {}
+      } else if (mounted) {
+        setState(() => _collectionItems = const []);
+      }
+      if (_isSeries) {
+        await _loadSeasonDetails(_selectedSeason);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _details = _WatchContentDetails.fallback(
+          mediaType: _normalizedMediaType,
+          title: widget.title,
+          posterUrl: widget.posterUrl,
+          backdropUrl: widget.backdropUrl,
+          overview: widget.overview,
+        );
+        _cast = const [];
+        _collectionItems = const [];
+        _similarItems = const [];
+      });
+    }
+  }
+
+  Future<void> _loadSeasonDetails(int seasonNumber) async {
+    if (!_isSeries) return;
+
+    setState(() {
+      _isLoadingSeason = true;
+      _seasonError = null;
+    });
+
+    try {
+      final data = await _contentService.tmdb(
+        'tv/${widget.tmdbId}/season/$seasonNumber',
+        query: const {'language': 'pt-BR'},
+      );
+      final nextDetails = _SeasonDetails.fromJson(data);
+      if (!mounted) return;
+      setState(() {
+        _selectedSeason = seasonNumber;
+        _seasonDetails = nextDetails;
+        final hasSelectedEpisode = nextDetails.episodes.any(
+          (episode) => episode.episodeNumber == _selectedEpisode,
+        );
+        _selectedEpisode = hasSelectedEpisode
+            ? _selectedEpisode
+            : (nextDetails.episodes.isNotEmpty
+                  ? nextDetails.episodes.first.episodeNumber
+                  : 1);
+        _isLoadingSeason = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingSeason = false;
+        _seasonError = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingSeason = false;
+        _seasonError = 'Não foi possível carregar os episódios agora.';
+      });
+    }
+  }
+
   void _hideRatingBadge() {
     if (_ratingBadgeOverlay == null) return;
 
@@ -132,6 +367,7 @@ class _WatchScreenState extends State<WatchScreen> {
   void _selectRating(String rating) {
     setState(() => _selectedRating = rating);
     _ratingBadgeOverlay?.markNeedsBuild();
+    _persistRating(rating);
   }
 
   void _selectWatchTab(String label) {
@@ -145,17 +381,148 @@ class _WatchScreenState extends State<WatchScreen> {
   }
 
   Future<void> _toggleMyList() async {
-    if (!_isInMyList && !MyListState.hasCreatedList) {
-      final name = await showCreateListModal(context);
-      if (name == null || !mounted) return;
-      MyListState.createList(name);
+    final userId = _userId;
+    if (userId == null) {
+      _showSnack('Faça login para salvar na sua lista.');
+      return;
     }
 
-    setState(() {
-      final next = !_isInMyList;
-      _isInMyList = next;
-      _isSaved = next;
-    });
+    if (_isSyncing) return;
+
+    var nextListName = _listName;
+    if (!_isInMyList && (nextListName == null || nextListName.trim().isEmpty)) {
+      final name = await showCreateListModal(context, initialName: _listName);
+      if (name == null || !mounted) return;
+      nextListName = name;
+    }
+
+    setState(() => _isSyncing = true);
+    try {
+      if (_isInMyList) {
+        await _contentService.removeFromWatchlist(
+          userId: userId,
+          tmdbId: widget.tmdbId,
+          mediaType: _normalizedMediaType,
+        );
+      } else {
+        if (nextListName != null && _userName != null) {
+          final updatedUser = await _authService.updateProfile(
+            userId: userId,
+            name: _userName,
+            listName: nextListName,
+          );
+          _userName = updatedUser.name;
+        }
+        await _contentService.addToWatchlist(
+          userId: userId,
+          tmdbId: widget.tmdbId,
+          mediaType: _normalizedMediaType,
+          title: widget.title,
+          listName: nextListName,
+          posterUrl: widget.posterUrl,
+          backdropUrl: widget.backdropUrl,
+        );
+      }
+
+      if (!mounted) return;
+      final nextValue = !_isInMyList;
+      setState(() {
+        _listName = nextListName;
+        _isInMyList = nextValue;
+        _isSaved = nextValue;
+        _isSyncing = false;
+        _interactionError = null;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSyncing = false;
+        _interactionError = error.message;
+      });
+      _showSnack(error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isSyncing = false;
+        _interactionError = 'Erro na comunicação com o servidor.';
+      });
+      _showSnack('Erro na comunicação com o servidor.');
+    }
+  }
+
+  Future<void> _persistRating(String rating) async {
+    final userId = _userId;
+    if (userId == null) {
+      _showSnack('Faça login para avaliar.');
+      return;
+    }
+
+    try {
+      await _contentService.saveRating(
+        userId: userId,
+        tmdbId: widget.tmdbId,
+        mediaType: _normalizedMediaType,
+        value: _ratingLabelToApi(rating),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _interactionError = error.message);
+      _showSnack(error.message);
+    }
+  }
+
+  Future<void> _handlePlay() async {
+    final userId = _userId;
+    if (userId != null) {
+      try {
+        await _contentService.saveWatchHistory(
+          userId: userId,
+          tmdbId: widget.tmdbId,
+          mediaType: _normalizedMediaType,
+          title: widget.title,
+          seasonNumber: _isSeries ? _selectedSeason : null,
+          episodeNumber: _isSeries ? _selectedEpisode : null,
+          progressPercent: 0,
+          posterUrl: widget.posterUrl,
+          backdropUrl: widget.backdropUrl,
+        );
+      } catch (_) {}
+    }
+
+    final url = _isSeries
+        ? 'https://megaembed.com/embed/${widget.tmdbId}/$_selectedSeason/$_selectedEpisode'
+        : 'https://megaembed.com/embed/${widget.tmdbId}';
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!mounted) return;
+      _showSnack('Não foi possível abrir o player.');
+    }
+  }
+
+  bool get _isSeries =>
+      _normalizedMediaType == 'tv' || _normalizedMediaType == 'series';
+
+  String get _normalizedMediaType =>
+      widget.mediaType == 'series' ? 'tv' : widget.mediaType;
+
+  String get _displayTitle => _details?.title ?? widget.title;
+
+  String? get _displayOverview => _details?.overview ?? widget.overview;
+
+  String? get _displayPosterUrl => _details?.posterUrl ?? widget.posterUrl;
+
+  String? get _displayBackdropUrl =>
+      _details?.backdropUrl ?? widget.backdropUrl ?? widget.posterUrl;
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: const Color(0xFFAD2536),
+        ),
+      );
   }
 
   void _scrollTopCastIntoView() {
@@ -210,7 +577,7 @@ class _WatchScreenState extends State<WatchScreen> {
         top: false,
         child: Stack(
           children: [
-            const _HeroBlurBackground(),
+            _HeroBlurBackground(imageUrl: _displayBackdropUrl),
             Positioned(
               right: -175,
               top: -144,
@@ -262,11 +629,10 @@ class _WatchScreenState extends State<WatchScreen> {
                           child: Center(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(20),
-                              child: Image.asset(
-                                'assets/watch/images/image-19-886.png',
+                              child: _WatchHeroImage(
+                                imageUrl: _displayPosterUrl,
                                 width: 230,
                                 height: 355,
-                                fit: BoxFit.cover,
                               ),
                             ),
                           ),
@@ -322,7 +688,16 @@ class _WatchScreenState extends State<WatchScreen> {
                   ),
                   const SizedBox(height: 20),
                   */
-                  const _MovieInfoSummary(),
+                  _MovieInfoSummary(
+                    title: _displayTitle,
+                    overview: _displayOverview,
+                    details: _details,
+                    onPlay: _handlePlay,
+                  ),
+                  if (_interactionError != null) ...[
+                    const SizedBox(height: 12),
+                    _WatchInlineError(message: _interactionError!),
+                  ],
                   /*
                   Descricao antiga separada. O novo bloco de informacoes do
                   Figma ja inclui a descricao, entao este trecho fica inativo.
@@ -427,25 +802,82 @@ class _WatchScreenState extends State<WatchScreen> {
 
   Widget _buildSelectedWatchTab() {
     if (_selectedWatchTab == 'Episodes') {
-      return const KeyedSubtree(
+      return KeyedSubtree(
         key: ValueKey('episodes-tab-content'),
-        child: _EpisodesSection(),
+        child: _EpisodesSection(
+          isSeries: _isSeries,
+          details: _details,
+          seasonDetails: _seasonDetails,
+          selectedSeason: _selectedSeason,
+          selectedEpisode: _selectedEpisode,
+          isLoading: _isLoadingSeason,
+          errorMessage: _seasonError,
+          onSeasonChanged: _loadSeasonDetails,
+          onEpisodeSelected: (episodeNumber) {
+            setState(() => _selectedEpisode = episodeNumber);
+          },
+        ),
+      );
+    }
+
+    if (_selectedWatchTab == 'Collection') {
+      return KeyedSubtree(
+        key: const ValueKey('collection-tab-content'),
+        child: _RelatedItemsSection(
+          title: 'Collection',
+          items: _collectionItems,
+          emptyMessage: _isSeries
+              ? 'Collections ficam disponíveis apenas para filmes.'
+              : 'Nenhum item de coleção disponível para este título.',
+          onItemTap: _openRelatedItem,
+        ),
+      );
+    }
+
+    if (_selectedWatchTab == 'More Like This') {
+      return KeyedSubtree(
+        key: const ValueKey('similar-tab-content'),
+        child: _RelatedItemsSection(
+          title: 'Títulos Semelhantes',
+          items: _similarItems,
+          emptyMessage: 'Nenhum título semelhante disponível agora.',
+          onItemTap: _openRelatedItem,
+        ),
       );
     }
 
     if (_selectedWatchTab == 'Top Cast') {
       return KeyedSubtree(
         key: _topCastKey,
-        child: const Column(children: [_CastRow(), SizedBox(height: 2)]),
+        child: Column(
+          children: [_CastRow(cast: _cast), const SizedBox(height: 2)],
+        ),
       );
     }
 
     return const SizedBox.shrink(key: ValueKey('empty-tab'));
   }
+
+  void _openRelatedItem(_RelatedWatchItem item) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WatchScreen(
+          tmdbId: item.tmdbId,
+          mediaType: item.mediaType,
+          title: item.title,
+          posterUrl: item.posterUrl,
+          backdropUrl: item.backdropUrl,
+          overview: item.overview,
+        ),
+      ),
+    );
+  }
 }
 
 class _HeroBlurBackground extends StatelessWidget {
-  const _HeroBlurBackground();
+  const _HeroBlurBackground({this.imageUrl});
+
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -461,10 +893,10 @@ class _HeroBlurBackground extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.asset(
-                'assets/watch/images/image-19-886.png',
-                fit: BoxFit.cover,
-                alignment: Alignment.topCenter,
+              _WatchHeroImage(
+                imageUrl: imageUrl,
+                width: double.infinity,
+                height: double.infinity,
               ),
               DecoratedBox(
                 decoration: BoxDecoration(
@@ -647,7 +1079,17 @@ class _PressableScaleState extends State<_PressableScale> {
 }
 
 class _MovieInfoSummary extends StatelessWidget {
-  const _MovieInfoSummary();
+  const _MovieInfoSummary({
+    required this.title,
+    required this.onPlay,
+    this.overview,
+    this.details,
+  });
+
+  final String title;
+  final String? overview;
+  final _WatchContentDetails? details;
+  final Future<void> Function() onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -666,7 +1108,7 @@ class _MovieInfoSummary extends StatelessWidget {
                 SizedBox(
                   height: 20,
                   child: Text(
-                    'Blade Runner 2049',
+                    title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -679,18 +1121,20 @@ class _MovieInfoSummary extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: 8),
-                _MovieMetaRow(),
+                _MovieMetaRow(details: details),
               ],
             ),
           ),
           SizedBox(height: 8),
-          _WatchInlineButtons(),
+          _WatchInlineButtons(onPlay: onPlay),
           SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             height: 70,
             child: Text(
-              "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard, who's been missing for thirty years.",
+              overview?.trim().isNotEmpty == true
+                  ? overview!.trim()
+                  : "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard, who's been missing for thirty years.",
               maxLines: 3,
               overflow: TextOverflow.fade,
               style: TextStyle(
@@ -723,10 +1167,17 @@ class _MovieInfoSummary extends StatelessWidget {
 }
 
 class _MovieMetaRow extends StatelessWidget {
-  const _MovieMetaRow();
+  const _MovieMetaRow({this.details});
+
+  final _WatchContentDetails? details;
 
   @override
   Widget build(BuildContext context) {
+    final year = details?.year ?? '';
+    final ageRating = details?.ageRating ?? '16+';
+    final runtime = details?.runtimeLabel ?? '';
+    final voteAverage = details?.voteAverageLabel ?? '8.0';
+
     return SizedBox(
       height: 20,
       child: FittedBox(
@@ -745,13 +1196,17 @@ class _MovieMetaRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Row(
+            Row(
               children: [
-                Icon(Icons.star_rounded, color: Color(0xFFFDC943), size: 16),
-                SizedBox(width: 2),
+                const Icon(
+                  Icons.star_rounded,
+                  color: Color(0xFFFDC943),
+                  size: 16,
+                ),
+                const SizedBox(width: 2),
                 Text(
-                  '8.0',
-                  style: TextStyle(
+                  voteAverage,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
                     fontFamily: 'Inter',
@@ -762,9 +1217,9 @@ class _MovieMetaRow extends StatelessWidget {
               ],
             ),
             const SizedBox(width: 8),
-            const Text(
-              '2017',
-              style: TextStyle(
+            Text(
+              year,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,
                 fontFamily: 'Inter',
@@ -773,18 +1228,20 @@ class _MovieMetaRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const _InfoPill(label: '16+', filled: true),
-            const SizedBox(width: 8),
-            const Text(
-              '2h 43m',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w400,
-                height: 18 / 14,
+            _InfoPill(label: ageRating, filled: true),
+            if (runtime.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Text(
+                runtime,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w400,
+                  height: 18 / 14,
+                ),
               ),
-            ),
+            ],
             const SizedBox(width: 8),
             const _InfoPill(label: 'HD'),
           ],
@@ -833,7 +1290,9 @@ class _InfoPill extends StatelessWidget {
 }
 
 class _WatchInlineButtons extends StatelessWidget {
-  const _WatchInlineButtons();
+  const _WatchInlineButtons({required this.onPlay});
+
+  final Future<void> Function() onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -846,6 +1305,7 @@ class _WatchInlineButtons extends StatelessWidget {
             label: 'Play',
             icon: Icons.play_arrow_rounded,
             primary: true,
+            onTap: onPlay,
           ),
           SizedBox(height: 10),
           _WatchActionButton(label: 'Trailer'),
@@ -860,17 +1320,20 @@ class _WatchActionButton extends StatelessWidget {
     required this.label,
     this.icon,
     this.primary = false,
+    this.onTap,
   });
 
   final String label;
   final IconData? icon;
   final bool primary;
+  final Future<void> Function()? onTap;
 
   @override
   Widget build(BuildContext context) {
     final contentColor = primary ? Colors.black : Colors.white;
 
     return _PressableScale(
+      onTap: onTap == null ? null : () => onTap!.call(),
       pressedScale: 0.96,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
@@ -906,6 +1369,391 @@ class _WatchActionButton extends StatelessWidget {
       ),
     );
   }
+}
+
+class _WatchHeroImage extends StatelessWidget {
+  const _WatchHeroImage({
+    required this.width,
+    required this.height,
+    this.imageUrl,
+  });
+
+  final String? imageUrl;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return Image.asset(
+        'assets/watch/images/image-19-886.png',
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        alignment: Alignment.topCenter,
+      );
+    }
+
+    return Image.network(
+      imageUrl!,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      alignment: Alignment.topCenter,
+      errorBuilder: (_, _, _) => Image.asset(
+        'assets/watch/images/image-19-886.png',
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        alignment: Alignment.topCenter,
+      ),
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return Container(
+          width: width,
+          height: height,
+          color: const Color(0xFF111111),
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Colors.white,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _WatchInlineError extends StatelessWidget {
+  const _WatchInlineError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0x33AD2536),
+        border: Border.all(color: const Color(0x66AD2536)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WatchContentDetails {
+  const _WatchContentDetails({
+    required this.title,
+    required this.mediaType,
+    this.overview,
+    this.posterUrl,
+    this.backdropUrl,
+    this.year,
+    this.ageRating,
+    this.runtimeLabel,
+    this.voteAverageLabel,
+    this.episodesCount,
+    this.seasons = const [],
+    this.collectionId,
+  });
+
+  factory _WatchContentDetails.fromJson(
+    Map<String, dynamic> json, {
+    required String mediaType,
+    required String fallbackTitle,
+    String? fallbackPosterUrl,
+    String? fallbackBackdropUrl,
+    String? fallbackOverview,
+  }) {
+    final title = (json['title'] ?? json['name'] ?? fallbackTitle).toString();
+    final posterPath = json['poster_path']?.toString();
+    final backdropPath = json['backdrop_path']?.toString();
+    final date = (json['release_date'] ?? json['first_air_date'] ?? '')
+        .toString();
+    final runtime = _resolveRuntime(json);
+    final voteAverage = (json['vote_average'] as num?)?.toDouble();
+
+    return _WatchContentDetails(
+      title: title,
+      mediaType: mediaType,
+      overview: json['overview']?.toString() ?? fallbackOverview,
+      posterUrl: _tmdbImageUrl(posterPath) ?? fallbackPosterUrl,
+      backdropUrl:
+          _tmdbImageUrl(backdropPath, size: 'w1280') ??
+          fallbackBackdropUrl ??
+          fallbackPosterUrl,
+      year: date.length >= 4 ? date.substring(0, 4) : '',
+      ageRating: mediaType == 'tv' ? 'TV' : '16+',
+      runtimeLabel: runtime > 0 ? _formatRuntime(runtime) : null,
+      voteAverageLabel: voteAverage?.toStringAsFixed(1),
+      episodesCount: json['number_of_episodes'] as int?,
+      collectionId: (json['belongs_to_collection'] is Map<String, dynamic>)
+          ? ((json['belongs_to_collection']['id'] as num?)?.toInt())
+          : null,
+      seasons: switch (json['seasons']) {
+        final List<dynamic> value => [
+          for (final season in value)
+            if (season is Map<String, dynamic>)
+              _SeasonItemDetails.fromJson(season),
+        ],
+        _ => const [],
+      },
+    );
+  }
+
+  factory _WatchContentDetails.fallback({
+    required String mediaType,
+    required String title,
+    String? posterUrl,
+    String? backdropUrl,
+    String? overview,
+  }) {
+    return _WatchContentDetails(
+      title: title,
+      mediaType: mediaType,
+      posterUrl: posterUrl,
+      backdropUrl: backdropUrl ?? posterUrl,
+      overview: overview,
+    );
+  }
+
+  final String title;
+  final String mediaType;
+  final String? overview;
+  final String? posterUrl;
+  final String? backdropUrl;
+  final String? year;
+  final String? ageRating;
+  final String? runtimeLabel;
+  final String? voteAverageLabel;
+  final int? episodesCount;
+  final List<_SeasonItemDetails> seasons;
+  final int? collectionId;
+}
+
+class _SeasonItemDetails {
+  const _SeasonItemDetails({
+    required this.id,
+    required this.seasonNumber,
+    required this.name,
+    this.episodeCount,
+  });
+
+  factory _SeasonItemDetails.fromJson(Map<String, dynamic> json) {
+    return _SeasonItemDetails(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      seasonNumber: (json['season_number'] as num?)?.toInt() ?? 0,
+      name: json['name']?.toString() ?? '',
+      episodeCount: (json['episode_count'] as num?)?.toInt(),
+    );
+  }
+
+  final int id;
+  final int seasonNumber;
+  final String name;
+  final int? episodeCount;
+}
+
+class _SeasonDetails {
+  const _SeasonDetails({this.episodes = const []});
+
+  factory _SeasonDetails.fromJson(Map<String, dynamic> json) {
+    return _SeasonDetails(
+      episodes: switch (json['episodes']) {
+        final List<dynamic> value => [
+          for (final episode in value)
+            if (episode is Map<String, dynamic>)
+              _EpisodeDetails.fromJson(episode),
+        ],
+        _ => const [],
+      },
+    );
+  }
+
+  final List<_EpisodeDetails> episodes;
+}
+
+class _EpisodeDetails {
+  const _EpisodeDetails({
+    required this.id,
+    required this.episodeNumber,
+    required this.title,
+    required this.description,
+    required this.durationLabel,
+    this.stillUrl,
+    this.airDateLabel,
+  });
+
+  factory _EpisodeDetails.fromJson(Map<String, dynamic> json) {
+    final runtime = (json['runtime'] as num?)?.toInt() ?? 0;
+    final airDateRaw = json['air_date']?.toString();
+    return _EpisodeDetails(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      episodeNumber: (json['episode_number'] as num?)?.toInt() ?? 0,
+      title: json['name']?.toString() ?? 'Episódio',
+      description: (json['overview']?.toString().trim().isNotEmpty == true)
+          ? json['overview'].toString().trim()
+          : 'Sem descrição disponível.',
+      durationLabel: runtime > 0 ? _formatRuntime(runtime) : 'Episódio',
+      stillUrl: _tmdbImageUrl(json['still_path']?.toString()),
+      airDateLabel: _formatAirDate(airDateRaw),
+    );
+  }
+
+  final int id;
+  final int episodeNumber;
+  final String title;
+  final String description;
+  final String durationLabel;
+  final String? stillUrl;
+  final String? airDateLabel;
+}
+
+class _CastPerson {
+  const _CastPerson({
+    required this.name,
+    required this.role,
+    this.imageUrl,
+  });
+
+  final String name;
+  final String role;
+  final String? imageUrl;
+}
+
+class _RelatedWatchItem {
+  const _RelatedWatchItem({
+    required this.tmdbId,
+    required this.mediaType,
+    required this.title,
+    this.posterUrl,
+    this.backdropUrl,
+    this.overview,
+  });
+
+  final int tmdbId;
+  final String mediaType;
+  final String title;
+  final String? posterUrl;
+  final String? backdropUrl;
+  final String? overview;
+}
+
+int _resolveRuntime(Map<String, dynamic> json) {
+  final runtime = json['runtime'];
+  if (runtime is num) return runtime.toInt();
+
+  final episodeRuntime = json['episode_run_time'];
+  if (episodeRuntime is List && episodeRuntime.isNotEmpty) {
+    final first = episodeRuntime.first;
+    if (first is num) return first.toInt();
+  }
+
+  return 0;
+}
+
+String _formatRuntime(int minutes) {
+  final hours = minutes ~/ 60;
+  final remaining = minutes % 60;
+  if (hours <= 0) return '${minutes}m';
+  if (remaining == 0) return '${hours}h';
+  return '${hours}h ${remaining}m';
+}
+
+String? _formatAirDate(String? value) {
+  if (value == null || value.isEmpty) return null;
+  final date = DateTime.tryParse(value);
+  if (date == null) return null;
+  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+}
+
+String? _tmdbImageUrl(String? path, {String size = 'w780'}) {
+  if (path == null || path.isEmpty) return null;
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return 'https://image.tmdb.org/t/p/$size$path';
+}
+
+List<_CastPerson> _parseCast(Map<String, dynamic> json) {
+  final cast = json['cast'];
+  if (cast is! List<dynamic>) return const [];
+
+  return [
+    for (final item in cast.take(12))
+      if (item is Map<String, dynamic>)
+        _CastPerson(
+          name: item['name']?.toString() ?? 'Elenco',
+          role: item['character']?.toString() ?? '',
+          imageUrl: _tmdbImageUrl(item['profile_path']?.toString(), size: 'w185'),
+        ),
+  ];
+}
+
+List<_RelatedWatchItem> _parseRelatedItems(
+  Map<String, dynamic> json,
+  String mediaType,
+) {
+  final results = json['results'];
+  if (results is! List<dynamic>) return const [];
+
+  return [
+    for (final item in results.take(20))
+      if (item is Map<String, dynamic>)
+        _RelatedWatchItem(
+          tmdbId: (item['id'] as num?)?.toInt() ?? 0,
+          mediaType: mediaType,
+          title: (item['title'] ?? item['name'] ?? 'Título').toString(),
+          posterUrl: _tmdbImageUrl(item['poster_path']?.toString()),
+          backdropUrl: _tmdbImageUrl(
+            item['backdrop_path']?.toString(),
+            size: 'w1280',
+          ),
+          overview: item['overview']?.toString(),
+        ),
+  ].where((item) => item.tmdbId > 0).toList();
+}
+
+List<_RelatedWatchItem> _parseCollectionItems(Map<String, dynamic> json) {
+  final parts = json['parts'];
+  if (parts is! List<dynamic>) return const [];
+
+  return [
+    for (final item in parts)
+      if (item is Map<String, dynamic>)
+        _RelatedWatchItem(
+          tmdbId: (item['id'] as num?)?.toInt() ?? 0,
+          mediaType: 'movie',
+          title: item['title']?.toString() ?? 'Filme',
+          posterUrl: _tmdbImageUrl(item['poster_path']?.toString()),
+          backdropUrl: _tmdbImageUrl(
+            item['backdrop_path']?.toString(),
+            size: 'w1280',
+          ),
+          overview: item['overview']?.toString(),
+        ),
+  ].where((item) => item.tmdbId > 0).toList();
 }
 
 // Mantido para reativar o bloco antigo de informacoes em cards, comentado acima.
@@ -1000,77 +1848,84 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _EpisodesSection extends StatelessWidget {
-  const _EpisodesSection();
+  const _EpisodesSection({
+    required this.isSeries,
+    required this.details,
+    required this.seasonDetails,
+    required this.selectedSeason,
+    required this.selectedEpisode,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.onSeasonChanged,
+    required this.onEpisodeSelected,
+  });
 
-  static const _episodes = [
-    _EpisodeItem(
-      image: 'assets/watch/episodes/Frame-120-2787-1588.png',
-      title: '1. Episode 1',
-      duration: '1h',
-      description:
-          'In 1977, frustrated FBI hostage negotiator Holden Ford finds an unlikely ally in veteran agent Bill Tench and begins studying a new class of murderer.',
-    ),
-    _EpisodeItem(
-      image: 'assets/watch/episodes/Frame-120-2787-1601.png',
-      title: '2. Episode 2',
-      duration: '1h',
-      description:
-          'Holden interviews the eerily articulate murderer Ed Kemper, but his research provokes negative feedback at the Bureau.',
-    ),
-    _EpisodeItem(
-      image: 'assets/watch/episodes/Frame-120-2787-1614.png',
-      title: '3. Episode 3',
-      duration: '1h',
-      description:
-          'Dr. Wendy Carr joins Holden and Tench in their first success, when their insights lead to an arrest.',
-    ),
-    _EpisodeItem(
-      image: 'assets/watch/episodes/Frame-120-2787-1588.png',
-      title: '4. Episode 4',
-      duration: '1h',
-      description:
-          'Bill and Holden consult on a baffling Altoona case. Wendy rethinks her future as the team tests a new way to understand suspects.',
-    ),
-    _EpisodeItem(
-      image: 'assets/watch/episodes/Frame-120-2787-1588.png',
-      title: '5. Episode 5',
-      duration: '1h',
-      description:
-          'Holden and Bill return to a perplexing case in Pennsylvania where a set of clues leading in multiple directions leaves no shortage of suspects.',
-    ),
-    _EpisodeItem(
-      image: 'assets/watch/episodes/Frame-120-2787-1601.png',
-      title: '6. Episode 6',
-      duration: '1h',
-      description:
-          'Wendy considers an offer. Holden and Bill struggle to communicate the meaning of their findings to the judicial system in the baffling Altoona case.',
-    ),
-    _EpisodeItem(
-      image: 'assets/watch/episodes/Frame-120-2787-1614.png',
-      title: '7. Episode 7',
-      duration: '1h',
-      description:
-          'Wendy takes a career risk to relocate and join the team full time. Holden and Bill find it harder to keep the emotional intensity of work at bay.',
-    ),
-    _EpisodeItem(
-      image: 'assets/watch/episodes/Frame-120-2787-1601.png',
-      title: '8. Episode 8',
-      duration: '1h',
-      description:
-          "Bill and Wendy interview candidates for a fourth member of the team. Holden is intrigued by complaints about a school principal's odd habit.",
-    ),
-  ];
+  final bool isSeries;
+  final _WatchContentDetails? details;
+  final _SeasonDetails? seasonDetails;
+  final int selectedSeason;
+  final int selectedEpisode;
+  final bool isLoading;
+  final String? errorMessage;
+  final ValueChanged<int> onSeasonChanged;
+  final ValueChanged<int> onEpisodeSelected;
 
   @override
   Widget build(BuildContext context) {
+    if (!isSeries) {
+      return const _EpisodesEmptyState(
+        message: 'Este título é um filme e não possui temporadas.',
+      );
+    }
+
+    final seasons = details?.seasons
+            .where((season) => season.seasonNumber > 0)
+            .toList() ??
+        const <_SeasonItemDetails>[];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SeasonSelector(),
-        const SizedBox(height: 5),
-        for (var index = 0; index < _episodes.length; index++) ...[
-          _EpisodeCard(item: _episodes[index]),
-          if (index != _episodes.length - 1) const SizedBox(height: 28),
+        _SeasonSelector(
+          seasons: seasons,
+          selectedSeason: selectedSeason,
+          onChanged: onSeasonChanged,
+        ),
+        const SizedBox(height: 8),
+        if (details != null) ...[
+          Text(
+            '${seasons.length} temporadas • ${details!.episodesCount ?? 0} episódios',
+            style: const TextStyle(
+              color: Color(0xB3FFFFFF),
+              fontSize: 12,
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 14),
+        ],
+        if (isLoading)
+          const _EpisodesLoadingState()
+        else if (errorMessage != null)
+          _EpisodesEmptyState(message: errorMessage!)
+        else if (seasonDetails == null || seasonDetails!.episodes.isEmpty)
+          const _EpisodesEmptyState(
+            message: 'Nenhum episódio encontrado para esta temporada.',
+          )
+        else ...[
+          for (var index = 0; index < seasonDetails!.episodes.length; index++) ...[
+            _EpisodeCard(
+              item: seasonDetails!.episodes[index],
+              isSelected:
+                  seasonDetails!.episodes[index].episodeNumber ==
+                  selectedEpisode,
+              onTap: () => onEpisodeSelected(
+                seasonDetails!.episodes[index].episodeNumber,
+              ),
+            ),
+            if (index != seasonDetails!.episodes.length - 1)
+              const SizedBox(height: 28),
+          ],
         ],
       ],
     );
@@ -1078,38 +1933,71 @@ class _EpisodesSection extends StatelessWidget {
 }
 
 class _SeasonSelector extends StatelessWidget {
-  const _SeasonSelector();
+  const _SeasonSelector({
+    required this.seasons,
+    required this.selectedSeason,
+    required this.onChanged,
+  });
+
+  final List<_SeasonItemDetails> seasons;
+  final int selectedSeason;
+  final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Season 1',
-          style: TextStyle(
+    if (seasons.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: selectedSeason,
+          dropdownColor: const Color(0xFF171717),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: Color(0xB3FFFFFF),
+            size: 18,
+          ),
+          style: const TextStyle(
             color: Color(0xB3FFFFFF),
             fontSize: 16,
             fontFamily: 'Netflix Sans',
             fontWeight: FontWeight.w400,
             letterSpacing: 0.64,
           ),
+          items: [
+            for (final season in seasons)
+              DropdownMenuItem<int>(
+                value: season.seasonNumber,
+                child: Text('Temporada ${season.seasonNumber}'),
+              ),
+          ],
+          onChanged: (value) {
+            if (value != null) onChanged(value);
+          },
         ),
-        SizedBox(width: 14),
-        Icon(
-          Icons.keyboard_arrow_down_rounded,
-          color: Color(0xB3FFFFFF),
-          size: 18,
-        ),
-      ],
+      ),
     );
   }
 }
 
 class _EpisodeCard extends StatelessWidget {
-  const _EpisodeCard({required this.item});
+  const _EpisodeCard({
+    required this.item,
+    required this.isSelected,
+    required this.onTap,
+  });
 
-  final _EpisodeItem item;
+  final _EpisodeDetails item;
+  final bool isSelected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1118,72 +2006,89 @@ class _EpisodeCard extends StatelessWidget {
         final scale = (constraints.maxWidth / 347).clamp(0.78, 1.0);
         final imageWidth = 148 * scale;
         final imageHeight = 83 * scale;
-        final downloadSize = 32 * scale;
+        final iconSize = 32 * scale;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(
-              height: imageHeight,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(
-                    width: imageWidth,
-                    height: imageHeight,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image.asset(
-                        item.image,
+            GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isSelected
+                        ? const Color(0xFF45D468)
+                        : Colors.transparent,
+                  ),
+                ),
+                child: SizedBox(
+                  height: imageHeight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SizedBox(
                         width: imageWidth,
                         height: imageHeight,
-                        fit: BoxFit.cover,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: _EpisodeStillImage(
+                            imageUrl: item.stillUrl,
+                            width: imageWidth,
+                            height: imageHeight,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  SizedBox(width: 7 * scale),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontFamily: 'Netflix Sans',
-                            fontWeight: FontWeight.w400,
-                            height: 20 / 16,
-                          ),
+                      SizedBox(width: 7 * scale),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${item.episodeNumber}. ${item.title}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontFamily: 'Netflix Sans',
+                                fontWeight: FontWeight.w400,
+                                height: 20 / 16,
+                              ),
+                            ),
+                            Text(
+                              item.durationLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xB3FFFFFF),
+                                fontSize: 14,
+                                fontFamily: 'Netflix Sans',
+                                fontWeight: FontWeight.w300,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          item.duration,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xB3FFFFFF),
-                            fontSize: 14,
-                            fontFamily: 'Netflix Sans',
-                            fontWeight: FontWeight.w300,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                      SizedBox(width: 16 * scale),
+                      Icon(
+                        isSelected
+                            ? Icons.play_circle_fill_rounded
+                            : Icons.play_circle_outline_rounded,
+                        color: Colors.white,
+                        size: iconSize,
+                      ),
+                    ],
                   ),
-                  SizedBox(width: 16 * scale),
-                  SizedBox(
-                    width: downloadSize,
-                    height: downloadSize,
-                    child: Icon(
-                      Icons.file_download_outlined,
-                      color: const Color(0xB3FFFFFF),
-                      size: 25 * scale,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -1198,6 +2103,18 @@ class _EpisodeCard extends StatelessWidget {
                 fontWeight: FontWeight.w400,
               ),
             ),
+            if (item.airDateLabel != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                item.airDateLabel!,
+                style: const TextStyle(
+                  color: Color(0x80FFFFFF),
+                  fontSize: 11,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ],
         );
       },
@@ -1205,39 +2122,116 @@ class _EpisodeCard extends StatelessWidget {
   }
 }
 
-class _CastRow extends StatelessWidget {
-  const _CastRow();
-
-  static const _cast = [
-    _CastItem(
-      image: 'assets/watch/vectors/vector-I62-2804-62-2782.png',
-      name: 'Tom Hanks',
-      role: 'Jeff',
-    ),
-    _CastItem(
-      image: 'assets/watch/vectors/vector-I62-2786-62-2782.png',
-      name: 'Tom Hanks',
-      role: 'Sharon',
-    ),
-    _CastItem(
-      image: 'assets/watch/vectors/vector-I62-2794-62-2782.png',
-      name: 'Tom Hanks',
-      role: 'Mary',
-    ),
-    _CastItem(
-      image: 'assets/watch/vectors/vector-I62-2795-62-2782.png',
-      name: 'Tom Hanks',
-      role: 'Sonia',
-    ),
-    _CastItem(
-      image: 'assets/watch/vectors/vector-I62-2790-62-2782.png',
-      name: 'Tom Hanks',
-      role: 'Jeff',
-    ),
-  ];
+class _EpisodesLoadingState extends StatelessWidget {
+  const _EpisodesLoadingState();
 
   @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var index = 0; index < 3; index++) ...[
+          Container(
+            height: 92,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          if (index != 2) const SizedBox(height: 18),
+        ],
+      ],
+    );
+  }
+}
+
+class _EpisodesEmptyState extends StatelessWidget {
+  const _EpisodesEmptyState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          color: Color(0xB3FFFFFF),
+          fontSize: 13,
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w500,
+          height: 1.4,
+        ),
+      ),
+    );
+  }
+}
+
+class _EpisodeStillImage extends StatelessWidget {
+  const _EpisodeStillImage({
+    required this.imageUrl,
+    required this.width,
+    required this.height,
+  });
+
+  final String? imageUrl;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return Container(
+        width: width,
+        height: height,
+        color: const Color(0xFF171717),
+        alignment: Alignment.center,
+        child: const Icon(
+          Icons.live_tv_rounded,
+          color: Color(0x80FFFFFF),
+          size: 24,
+        ),
+      );
+    }
+
+    return Image.network(
+      imageUrl!,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Container(
+        width: width,
+        height: height,
+        color: const Color(0xFF171717),
+        alignment: Alignment.center,
+        child: const Icon(
+          Icons.live_tv_rounded,
+          color: Color(0x80FFFFFF),
+          size: 24,
+        ),
+      ),
+    );
+  }
+}
+
+class _CastRow extends StatelessWidget {
+  const _CastRow({required this.cast});
+
+  final List<_CastPerson> cast;
+
+  @override
+  Widget build(BuildContext context) {
+    if (cast.isEmpty) {
+      return const _EpisodesEmptyState(
+        message: 'Não foi possível carregar o elenco principal agora.',
+      );
+    }
+
     final screenWidth = MediaQuery.sizeOf(context).width;
 
     return SizedBox(
@@ -1255,9 +2249,9 @@ class _CastRow extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            itemCount: _cast.length,
+            itemCount: cast.length,
             separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (context, index) => _CastCard(item: _cast[index]),
+            itemBuilder: (context, index) => _CastCard(item: cast[index]),
           ),
         ),
       ),
@@ -1268,7 +2262,7 @@ class _CastRow extends StatelessWidget {
 class _CastCard extends StatelessWidget {
   const _CastCard({required this.item});
 
-  final _CastItem item;
+  final _CastPerson item;
 
   @override
   Widget build(BuildContext context) {
@@ -1276,7 +2270,12 @@ class _CastCard extends StatelessWidget {
       width: 77,
       child: Column(
         children: [
-          Image.asset(item.image, width: 60, height: 60, fit: BoxFit.contain),
+          ClipOval(
+            child: _CastAvatar(
+              imageUrl: item.imageUrl,
+              size: 60,
+            ),
+          ),
           const SizedBox(height: 10),
           Text(
             item.name,
@@ -1292,7 +2291,7 @@ class _CastCard extends StatelessWidget {
             ),
           ),
           Text(
-            item.role,
+            item.role.isEmpty ? 'Elenco' : item.role,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
@@ -1552,6 +2551,157 @@ const _ratedIconSvg = '''
 <path d="M14.0314 12.2488L14.5 8.5V7.57282C14.5 7.25646 14.7565 7 15.0728 7C16.2909 7 17.443 7.5537 18.2039 8.50488L18.8112 9.26395C18.9334 9.41675 19 9.60661 19 9.80229V14H21.5858C21.851 14 22.1054 14.1054 22.2929 14.2929L24.7071 16.7071C24.8946 16.8946 25 17.149 25 17.4142V18.901C25 18.9668 24.9935 19.0325 24.9806 19.0971L24.5594 21.2031C24.5207 21.3967 24.4255 21.5745 24.2859 21.7141L23.6669 22.3331C23.5572 22.4428 23.4744 22.5767 23.4253 22.724L23.1085 23.6745C23.0382 23.8855 22.8995 24.067 22.7145 24.1903L21.7519 24.8321C21.5877 24.9416 21.3946 25 21.1972 25H14.2361C14.0808 25 13.9277 24.9639 13.7889 24.8944L11.2111 23.6056C11.0723 23.5361 10.9192 23.5 10.7639 23.5H9C8.44772 23.5 8 23.0523 8 22.5V18.1594C8 17.7594 8.2384 17.3978 8.60608 17.2403L11.2428 16.1102C11.411 16.0381 11.5563 15.9212 11.6626 15.7723L13.8529 12.706C13.9494 12.5708 14.0108 12.4137 14.0314 12.2488Z" fill="white"/>
 </svg>
 ''';
+
+String _ratingLabelToApi(String rating) {
+  switch (rating) {
+    case 'Amei':
+      return 'love';
+    case 'NÃ£o gostei':
+      return 'dislike';
+    default:
+      return 'like';
+  }
+}
+
+class _CastAvatar extends StatelessWidget {
+  const _CastAvatar({required this.imageUrl, required this.size});
+
+  final String? imageUrl;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return Container(
+        width: size,
+        height: size,
+        color: const Color(0xFF1A1A1A),
+        alignment: Alignment.center,
+        child: const Icon(Icons.person_rounded, color: Colors.white, size: 26),
+      );
+    }
+
+    return Image.network(
+      imageUrl!,
+      width: size,
+      height: size,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Container(
+        width: size,
+        height: size,
+        color: const Color(0xFF1A1A1A),
+        alignment: Alignment.center,
+        child: const Icon(Icons.person_rounded, color: Colors.white, size: 26),
+      ),
+    );
+  }
+}
+
+class _RelatedItemsSection extends StatelessWidget {
+  const _RelatedItemsSection({
+    required this.title,
+    required this.items,
+    required this.emptyMessage,
+    required this.onItemTap,
+  });
+
+  final String title;
+  final List<_RelatedWatchItem> items;
+  final String emptyMessage;
+  final ValueChanged<_RelatedWatchItem> onItemTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return _EpisodesEmptyState(message: emptyMessage);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 222,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: items.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 14),
+            itemBuilder: (context, index) => _RelatedItemCard(
+              item: items[index],
+              onTap: () => onItemTap(items[index]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RelatedItemCard extends StatelessWidget {
+  const _RelatedItemCard({required this.item, required this.onTap});
+
+  final _RelatedWatchItem item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 132,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: _WatchHeroImage(
+                imageUrl: item.posterUrl,
+                width: 132,
+                height: 186,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              item.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String? _ratingLabelFromApi(String? value) {
+  switch (value) {
+    case 'love':
+      return 'Amei';
+    case 'dislike':
+      return 'NÃ£o gostei';
+    case 'like':
+      return 'Curti';
+    default:
+      return null;
+  }
+}
 
 String _ratedActionIconSvg(String? rating) {
   if (rating == null) return _ratedIconSvg;
@@ -1924,28 +3074,3 @@ class _BottomActions extends StatelessWidget {
   }
 }
 
-class _CastItem {
-  const _CastItem({
-    required this.image,
-    required this.name,
-    required this.role,
-  });
-
-  final String image;
-  final String name;
-  final String role;
-}
-
-class _EpisodeItem {
-  const _EpisodeItem({
-    required this.image,
-    required this.title,
-    required this.duration,
-    required this.description,
-  });
-
-  final String image;
-  final String title;
-  final String duration;
-  final String description;
-}

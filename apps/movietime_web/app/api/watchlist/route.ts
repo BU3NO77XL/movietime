@@ -18,6 +18,12 @@ export async function GET(request: NextRequest) {
     .eq('profile_id', profileId)
     .order('added_at', { ascending: false });
 
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('list_name')
+    .eq('id', profileId)
+    .maybeSingle();
+
   if (error) {
     return NextResponse.json(
       { error: 'Erro ao buscar watchlist.' },
@@ -25,19 +31,26 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ items });
+  return NextResponse.json({ items, listName: profile?.list_name ?? null });
 }
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const profileId = await getProfileIdFromRequest(request, body.userId);
-  const { tmdbId, mediaType, title, posterUrl, backdropUrl } = body;
+  const { tmdbId, mediaType, title, posterUrl, backdropUrl, listName } = body;
 
   if (!profileId || !tmdbId || !mediaType) {
     return NextResponse.json(
       { error: 'Usuario, tmdbId e mediaType sao obrigatorios.' },
       { status: 400 },
     );
+  }
+
+  if (typeof listName === 'string') {
+    await supabaseAdmin
+      .from('profiles')
+      .update({ list_name: listName.trim() || null })
+      .eq('id', profileId);
   }
 
   const { data: item, error } = await supabaseAdmin
@@ -66,7 +79,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  return NextResponse.json({ item }, { status: 201 });
+  return NextResponse.json(
+    { item, listName: typeof listName === 'string' ? listName.trim() || null : null },
+    { status: 201 },
+  );
 }
 
 export async function DELETE(request: NextRequest) {

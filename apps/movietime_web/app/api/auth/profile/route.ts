@@ -9,6 +9,7 @@ function serializeProfile(profile: any) {
     name: profile.full_name,
     role: profile.role,
     avatarUrl: profile.avatar_url,
+    listName: profile.list_name,
     createdAt: profile.created_at,
     preferences: profile.preferences
       ? {
@@ -26,14 +27,17 @@ function serializeProfile(profile: any) {
 export async function PATCH(request: NextRequest) {
   const body = await request.json();
   const profileId = await getProfileIdFromRequest(request, body.userId);
-  const { name } = body;
+  const { name, listName } = body;
 
   if (!profileId) {
     return NextResponse.json({ error: 'Nao autenticado.' }, { status: 401 });
   }
 
   const updates: Record<string, any> = {};
-  if (name) updates.full_name = name;
+  if (typeof name === 'string' && name.trim()) updates.full_name = name.trim();
+  if (typeof listName === 'string') {
+    updates.list_name = listName.trim() || null;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(

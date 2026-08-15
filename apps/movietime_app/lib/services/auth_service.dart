@@ -53,11 +53,12 @@ class AuthService {
 
   Future<AuthUser> updateProfile({
     int? userId,
-    required String name,
+    String? name,
+    String? listName,
   }) async {
     final data = await _apiClient.patchJson(
       '/api/auth/profile',
-      body: {'userId': userId, 'name': name},
+      body: {'userId': userId, 'name': name, 'listName': listName},
     );
 
     return AuthUser.fromJson(data['user'] as Map<String, dynamic>);

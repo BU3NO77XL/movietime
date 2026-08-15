@@ -20,13 +20,17 @@ class ContentService {
     return _apiClient.getJson('/api/content/$path', query: query);
   }
 
-  Future<List<WatchlistItem>> watchlist(int userId) async {
+  Future<WatchlistResponse> watchlistData(int userId) async {
     final data = await _apiClient.getJson(
       '/api/watchlist',
       query: {'userId': '$userId'},
     );
 
-    return _readItems(data, WatchlistItem.fromJson);
+    return WatchlistResponse.fromJson(data);
+  }
+
+  Future<List<WatchlistItem>> watchlist(int userId) async {
+    return (await watchlistData(userId)).items;
   }
 
   Future<void> addToWatchlist({
@@ -34,6 +38,7 @@ class ContentService {
     required int tmdbId,
     required String mediaType,
     required String title,
+    String? listName,
     String? posterUrl,
     String? backdropUrl,
   }) async {
@@ -44,6 +49,7 @@ class ContentService {
         'tmdbId': tmdbId,
         'mediaType': mediaType,
         'title': title,
+        'listName': listName,
         'posterUrl': posterUrl,
         'backdropUrl': backdropUrl,
       },
@@ -62,12 +68,57 @@ class ContentService {
   }
 
   Future<List<WatchHistoryItem>> watchHistory(int userId) async {
+    return watchHistoryForItem(userId);
+  }
+
+  Future<List<WatchHistoryItem>> watchHistoryForItem(
+    int userId, {
+    int? tmdbId,
+    String? mediaType,
+  }) async {
     final data = await _apiClient.getJson(
       '/api/watch-history',
-      query: {'userId': '$userId'},
+      query: {
+        'userId': '$userId',
+        'tmdbId': tmdbId?.toString(),
+        'mediaType': mediaType,
+      },
     );
 
     return _readItems(data, WatchHistoryItem.fromJson);
+  }
+
+  Future<void> saveWatchHistory({
+    required int userId,
+    required int tmdbId,
+    required String mediaType,
+    required String title,
+    int? seasonNumber,
+    int? episodeNumber,
+    int? totalSeasons,
+    int? totalEpisodes,
+    int? seasonEpisodes,
+    int progressPercent = 0,
+    String? posterUrl,
+    String? backdropUrl,
+  }) async {
+    await _apiClient.postJson(
+      '/api/watch-history',
+      body: {
+        'userId': userId,
+        'tmdbId': tmdbId,
+        'mediaType': mediaType,
+        'title': title,
+        'seasonNumber': seasonNumber,
+        'episodeNumber': episodeNumber,
+        'totalSeasons': totalSeasons,
+        'totalEpisodes': totalEpisodes,
+        'seasonEpisodes': seasonEpisodes,
+        'progressPercent': progressPercent,
+        'posterUrl': posterUrl,
+        'backdropUrl': backdropUrl,
+      },
+    );
   }
 
   Future<void> saveRating({
@@ -84,6 +135,17 @@ class ContentService {
         'mediaType': mediaType,
         'value': value,
       },
+    );
+  }
+
+  Future<void> deleteRating({
+    required int userId,
+    required int tmdbId,
+    required String mediaType,
+  }) async {
+    await _apiClient.deleteJson(
+      '/api/ratings',
+      body: {'userId': userId, 'tmdbId': tmdbId, 'mediaType': mediaType},
     );
   }
 

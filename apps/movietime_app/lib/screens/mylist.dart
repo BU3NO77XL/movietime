@@ -2,12 +2,15 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../services/api_client.dart';
+import '../services/auth_models.dart';
+import '../services/auth_service.dart';
+import '../services/content_models.dart';
+import '../services/content_service.dart';
 import 'create_list_modal.dart';
-import 'my_list_state.dart';
 import 'profile.dart';
 import 'screen_transitions.dart';
-import 'see_all_mylist.dart';
-import 'watch_series_mylist.dart';
+import 'watch.dart';
 
 class MyListScreen extends StatefulWidget {
   const MyListScreen({super.key});
@@ -23,12 +26,135 @@ class MyListScreen extends StatefulWidget {
 }
 
 class _MyListScreenState extends State<MyListScreen> {
-  // ignore: unused_element
-  Future<void> _openCreateListModal() async {
-    final name = await showCreateListModal(context);
-    if (name == null) return;
+  final AuthService _authService = AuthService();
+  final ContentService _contentService = ContentService();
 
-    setState(() => MyListState.createList(name));
+  bool _isLoading = true;
+  bool _isSavingListName = false;
+  String? _errorMessage;
+  AuthUser? _user;
+  String? _listName;
+  List<WatchlistItem> _watchlist = const [];
+  List<WatchHistoryItem> _history = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  @override
+  void dispose() {
+    _authService.close();
+    _contentService.close();
+    super.dispose();
+  }
+
+  Future<void> _loadData({bool refresh = false}) async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = refresh ? null : _errorMessage;
+      });
+    }
+
+    try {
+      final user = await _authService.profile();
+      final results = await Future.wait([
+        _contentService.watchlistData(user.id),
+        _contentService.watchHistory(user.id),
+      ]);
+      final watchlist = results[0] as WatchlistResponse;
+      final history = results[1] as List<WatchHistoryItem>;
+
+      if (!mounted) return;
+      setState(() {
+        _user = user;
+        _listName = watchlist.listName ?? user.listName;
+        _watchlist = watchlist.items;
+        _history = history;
+        _isLoading = false;
+        _errorMessage = null;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = error.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Não foi possível carregar sua lista agora.';
+      });
+    }
+  }
+
+  Future<void> _editListName() async {
+    final user = _user;
+    if (user == null || _isSavingListName) return;
+
+    final name = await showCreateListModal(context, initialName: _listName);
+    if (name == null || !mounted) return;
+
+    setState(() => _isSavingListName = true);
+    try {
+      final updatedUser = await _authService.updateProfile(
+        userId: user.id,
+        name: user.name,
+        listName: name,
+      );
+      if (!mounted) return;
+      setState(() {
+        _user = updatedUser;
+        _listName = updatedUser.listName ?? name;
+        _isSavingListName = false;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() => _isSavingListName = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          backgroundColor: const Color(0xFFAD2536),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSavingListName = false);
+    }
+  }
+
+  Future<void> _removeFromWatchlist(WatchlistItem item) async {
+    final user = _user;
+    if (user == null) return;
+
+    try {
+      await _contentService.removeFromWatchlist(
+        userId: user.id,
+        tmdbId: item.tmdbId,
+        mediaType: item.mediaType,
+      );
+      if (!mounted) return;
+      setState(() {
+        _watchlist = _watchlist
+            .where(
+              (entry) =>
+                  entry.tmdbId != item.tmdbId ||
+                  entry.mediaType != item.mediaType,
+            )
+            .toList();
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message),
+          backgroundColor: const Color(0xFFAD2536),
+        ),
+      );
+    }
   }
 
   @override
@@ -54,180 +180,108 @@ class _MyListScreenState extends State<MyListScreen> {
                 ),
               ),
             ),
-            SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(24, 42, 0, 36),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            RefreshIndicator(
+              color: Colors.white,
+              backgroundColor: const Color(0xFF1A1A1A),
+              onRefresh: () => _loadData(refresh: true),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ),
+                padding: const EdgeInsets.fromLTRB(24, 42, 24, 36),
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 21),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            MyListState.hasCreatedList
-                                ? MyListState.listName
-                                : 'Minha lista',
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w600,
-                              height: 1.42,
-                            ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _listName?.trim().isNotEmpty == true
+                              ? _listName!.trim()
+                              : 'Minha lista',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w600,
+                            height: 1.42,
                           ),
                         ),
-                        // Botão "Adicionar" desativado: a criação da lista fica
-                        // vinculada ao fluxo de salvar conteúdo pela primeira vez.
-                        // GestureDetector(
-                        //   behavior: HitTestBehavior.opaque,
-                        //   onTap: _openCreateListModal,
-                        //   child: Container(
-                        //     width: 112,
-                        //     height: 40,
-                        //     decoration: ShapeDecoration(
-                        //       gradient: const LinearGradient(
-                        //         begin: Alignment.topCenter,
-                        //         end: Alignment.bottomCenter,
-                        //         colors: [
-                        //           MyListScreen._card,
-                        //           Color(0x330D0D0D),
-                        //         ],
-                        //       ),
-                        //       shape: RoundedRectangleBorder(
-                        //         side: const BorderSide(
-                        //           width: 1,
-                        //           color: Color(0xFF2C2C2C),
-                        //         ),
-                        //         borderRadius: BorderRadius.circular(40),
-                        //       ),
-                        //     ),
-                        //     child: Row(
-                        //       mainAxisAlignment: MainAxisAlignment.center,
-                        //       children: [
-                        //         Image.asset(
-                        //           'assets/mylist/vectors/vector-I2748-1182-61-5603-1-2275.png',
-                        //           width: 20,
-                        //           height: 20,
-                        //         ),
-                        //         const SizedBox(width: 10),
-                        //         const Flexible(
-                        //           child: Text(
-                        //             'Adicionar',
-                        //             overflow: TextOverflow.ellipsis,
-                        //             style: TextStyle(
-                        //               color: MyListScreen._lightMuted,
-                        //               fontSize: 12,
-                        //               fontFamily: 'Inter',
-                        //               fontWeight: FontWeight.w500,
-                        //               height: 1.33,
-                        //             ),
-                        //           ),
-                        //         ),
-                        //       ],
-                        //     ),
-                        //   ),
-                        // ),
-                      ],
+                      ),
+                      IconButton(
+                        onPressed: _user == null ? null : _editListName,
+                        icon: _isSavingListName
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.edit_outlined,
+                                color: Colors.white,
+                              ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _user == null
+                        ? 'Carregando seus dados...'
+                        : 'Seus títulos salvos e vistos recentemente em um só lugar.',
+                    style: const TextStyle(
+                      color: MyListScreen._lightMuted,
+                      fontSize: 13,
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 30),
-                  _FeaturedSection(
-                    title: 'Imperdiveis',
-                    items: const [
-                      _FeaturedItem(
-                        image:
-                            'assets/mylist/images/image-I63-1609-63-1598.png',
-                        title: 'Look for the light',
-                        subtitle: 'S01 . E02',
-                        opensSeriesWatch: true,
+                  const SizedBox(height: 24),
+                  if (_isLoading)
+                    const _CenteredStatus(
+                      icon: Icons.hourglass_top_rounded,
+                      title: 'Carregando sua lista',
+                      message: 'Buscando watchlist e recentes.',
+                    )
+                  else if (_errorMessage != null)
+                    _CenteredStatus(
+                      icon: Icons.error_outline_rounded,
+                      title: 'Erro ao carregar dados',
+                      message: _errorMessage!,
+                      actionLabel: 'Tentar novamente',
+                      onTap: () => _loadData(refresh: true),
+                    )
+                  else if (_watchlist.isEmpty && _history.isEmpty)
+                    const _CenteredStatus(
+                      icon: Icons.bookmark_border_rounded,
+                      title: 'Sua lista ainda está vazia',
+                      message:
+                          'Quando você salvar um título ou começar a assistir, ele aparece aqui.',
+                    )
+                  else ...[
+                    _SectionHeader(title: 'Adicionados na lista'),
+                    const SizedBox(height: 14),
+                    _PosterRail(
+                      items: _watchlist,
+                      emptyMessage: 'Nenhum título salvo ainda.',
+                      onTap: (item) => Navigator.of(context).push(
+                        cinematicPageRoute(WatchScreen.fromWatchlist(item)),
                       ),
-                      _FeaturedItem(
-                        image:
-                            'assets/mylist/images/image-I63-1616-63-1598.png',
-                        title: 'Look for the light',
-                        subtitle: 'S01 . E02',
+                      onRemove: _removeFromWatchlist,
+                    ),
+                    const SizedBox(height: 28),
+                    _SectionHeader(title: 'Vistos recentemente'),
+                    const SizedBox(height: 14),
+                    _PosterRail(
+                      items: _history,
+                      emptyMessage: 'Seu histórico aparece aqui.',
+                      onTap: (item) => Navigator.of(context).push(
+                        cinematicPageRoute(WatchScreen.fromHistory(item)),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  const _PosterSection(
-                    title: 'Adicionados na lista',
-                    posters: [
-                      _PosterItem(
-                        image:
-                            'assets/mylist/images/image-124baca1cf984ce56d64128e01abcac487ae5a4d.jpg',
-                        bar:
-                            'assets/mylist/vectors/vector-I63-1765-63-1750.png',
-                        progress:
-                            'assets/mylist/vectors/vector-I63-1765-63-1751.png',
-                      ),
-                      _PosterItem(
-                        image:
-                            'assets/mylist/images/image-I63-1778-63-1748.png',
-                        bar:
-                            'assets/mylist/vectors/vector-I63-1778-63-1750.png',
-                        progress:
-                            'assets/mylist/vectors/vector-I63-1778-63-1751.png',
-                      ),
-                      _PosterItem(
-                        image:
-                            'assets/mylist/images/image-I63-1772-63-1748.png',
-                        bar:
-                            'assets/mylist/vectors/vector-I63-1772-63-1750.png',
-                        progress:
-                            'assets/mylist/vectors/vector-I63-1772-63-1751.png',
-                      ),
-                      _PosterItem(
-                        image:
-                            'assets/mylist/images/image-I63-1758-63-1748.png',
-                        bar:
-                            'assets/mylist/vectors/vector-I63-1758-63-1750.png',
-                        progress:
-                            'assets/mylist/vectors/vector-I63-1758-63-1751.png',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  const _PosterSection(
-                    title: 'Vistos recentemente',
-                    posters: [
-                      _PosterItem(
-                        image:
-                            'assets/mylist/images/image-124baca1cf984ce56d64128e01abcac487ae5a4d.jpg',
-                        bar:
-                            'assets/mylist/vectors/vector-I2749-1194-63-1750.png',
-                        progress:
-                            'assets/mylist/vectors/vector-I2749-1194-63-1751.png',
-                      ),
-                      _PosterItem(
-                        image:
-                            'assets/mylist/images/image-I2749-1196-63-1748.png',
-                        bar:
-                            'assets/mylist/vectors/vector-I2749-1196-63-1750.png',
-                        progress:
-                            'assets/mylist/vectors/vector-I2749-1196-63-1751.png',
-                      ),
-                      _PosterItem(
-                        image:
-                            'assets/mylist/images/image-I2749-1198-63-1748.png',
-                        bar:
-                            'assets/mylist/vectors/vector-I2749-1198-63-1750.png',
-                        progress:
-                            'assets/mylist/vectors/vector-I2749-1198-63-1751.png',
-                      ),
-                      _PosterItem(
-                        image:
-                            'assets/mylist/images/image-I2749-1200-63-1748.png',
-                        bar:
-                            'assets/mylist/vectors/vector-I2749-1200-63-1750.png',
-                        progress:
-                            'assets/mylist/vectors/vector-I2749-1200-63-1751.png',
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -238,54 +292,240 @@ class _MyListScreenState extends State<MyListScreen> {
   }
 }
 
-class _FeaturedSection extends StatelessWidget {
-  const _FeaturedSection({required this.title, required this.items});
+class _PosterRail<T extends WatchlistItem> extends StatelessWidget {
+  const _PosterRail({
+    required this.items,
+    required this.emptyMessage,
+    required this.onTap,
+    this.onRemove,
+  });
 
-  final String title;
-  final List<_FeaturedItem> items;
+  final List<T> items;
+  final String emptyMessage;
+  final ValueChanged<T> onTap;
+  final ValueChanged<T>? onRemove;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionHeader(title: title),
-        const SizedBox(height: 20),
-        SizedBox(
-          height: 263,
-          child: Transform.translate(
-            offset: const Offset(-24, 0),
-            child: OverflowBox(
-              alignment: Alignment.centerLeft,
-              minWidth: MediaQuery.sizeOf(context).width,
-              maxWidth: MediaQuery.sizeOf(context).width,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                itemCount: items.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 20),
-                itemBuilder: (context, index) =>
-                    _FeaturedCard(item: items[index]),
-              ),
-            ),
+    if (items.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(18),
+        decoration: ShapeDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [MyListScreen._card, Color(0x330D0D0D)],
+          ),
+          shape: RoundedRectangleBorder(
+            side: const BorderSide(width: 1, color: MyListScreen._border),
+            borderRadius: BorderRadius.circular(20),
           ),
         ),
-      ],
+        child: Text(
+          emptyMessage,
+          style: const TextStyle(
+            color: MyListScreen._lightMuted,
+            fontSize: 13,
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 208,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 14),
+        itemBuilder: (context, index) {
+          final item = items[index];
+          return _PosterCard(
+            item: item,
+            onTap: () => onTap(item),
+            onRemove: onRemove == null ? null : () => onRemove!(item),
+          );
+        },
+      ),
     );
   }
 }
 
-class _FeaturedCard extends StatelessWidget {
-  const _FeaturedCard({required this.item});
+class _PosterCard extends StatelessWidget {
+  const _PosterCard({required this.item, required this.onTap, this.onRemove});
 
-  final _FeaturedItem item;
+  final WatchlistItem item;
+  final VoidCallback onTap;
+  final VoidCallback? onRemove;
 
   @override
   Widget build(BuildContext context) {
-    final card = Container(
-      width: 306,
-      padding: const EdgeInsets.all(12),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        width: 128,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _RemotePoster(url: item.posterUrl, width: 128),
+                ),
+                if (onRemove != null)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: onRemove,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.72),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              item.title.isEmpty ? 'Título indisponível' : item.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.mediaType == 'tv' || item.mediaType == 'series'
+                  ? 'Série'
+                  : 'Filme',
+              style: const TextStyle(
+                color: MyListScreen._lightMuted,
+                fontSize: 12,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            if (item is WatchHistoryItem) ...[
+              const SizedBox(height: 4),
+              Text(
+                _historyLabel(item as WatchHistoryItem),
+                style: const TextStyle(
+                  color: MyListScreen._muted,
+                  fontSize: 11,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _historyLabel(WatchHistoryItem item) {
+    if (item.seasonNumber > 0 && item.episodeNumber > 0) {
+      return 'S${item.seasonNumber} • E${item.episodeNumber}';
+    }
+    return 'Assistido recentemente';
+  }
+}
+
+class _RemotePoster extends StatelessWidget {
+  const _RemotePoster({required this.url, required this.width});
+
+  final String? url;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    if (url == null || url!.isEmpty) {
+      return _PosterFallback(width: width);
+    }
+
+    return Image.network(
+      url!,
+      width: width,
+      height: 165,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => _PosterFallback(width: width),
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) return child;
+        return _PosterFallback(width: width, loading: true);
+      },
+    );
+  }
+}
+
+class _PosterFallback extends StatelessWidget {
+  const _PosterFallback({required this.width, this.loading = false});
+
+  final double width;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: 165,
+      color: const Color(0xFF1A1A1A),
+      alignment: Alignment.center,
+      child: loading
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : const Icon(
+              Icons.movie_creation_outlined,
+              color: Color(0xFF9E9E9E),
+              size: 28,
+            ),
+    );
+  }
+}
+
+class _CenteredStatus extends StatelessWidget {
+  const _CenteredStatus({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.actionLabel,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
       decoration: ShapeDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
@@ -298,130 +538,41 @@ class _FeaturedCard extends StatelessWidget {
         ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(15),
-            child: Image.asset(
-              item.image,
-              width: double.infinity,
-              height: 187,
-              fit: BoxFit.cover,
+          Icon(icon, color: Colors.white, size: 28),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.only(left: 10),
-            child: Text(
-              item.title,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                height: 1.57,
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: MyListScreen._lightMuted,
+              fontSize: 13,
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w500,
+              height: 1.5,
+            ),
+          ),
+          if (actionLabel != null && onTap != null) ...[
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: onTap,
+              child: Text(
+                actionLabel!,
+                style: const TextStyle(color: Colors.white),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: 10),
-            child: Text(
-              item.subtitle,
-              style: const TextStyle(
-                color: MyListScreen._muted,
-                fontSize: 12,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                height: 1.33,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (!item.opensSeriesWatch) return card;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        Navigator.of(
-          context,
-        ).push(cinematicPageRoute(const WatchSeriesMyListScreen()));
-      },
-      child: card,
-    );
-  }
-}
-
-class _PosterSection extends StatelessWidget {
-  const _PosterSection({required this.title, required this.posters});
-
-  final String title;
-  final List<_PosterItem> posters;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionHeader(title: title),
-        const SizedBox(height: 20),
-        SizedBox(
-          height: 161,
-          child: Transform.translate(
-            offset: const Offset(-24, 0),
-            child: OverflowBox(
-              alignment: Alignment.centerLeft,
-              minWidth: MediaQuery.sizeOf(context).width,
-              maxWidth: MediaQuery.sizeOf(context).width,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                itemCount: posters.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 14),
-                itemBuilder: (context, index) =>
-                    _PosterCard(item: posters[index]),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PosterCard extends StatelessWidget {
-  const _PosterCard({required this.item});
-
-  final _PosterItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 100,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8.32),
-            child: Image.asset(
-              item.image,
-              width: 100,
-              height: 147,
-              fit: BoxFit.cover,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Image.asset(item.bar, width: 55.47, height: 1.87, fit: BoxFit.fill),
-          Image.asset(
-            item.progress,
-            width: 20.34,
-            height: 1.87,
-            fit: BoxFit.fill,
-          ),
+          ],
         ],
       ),
     );
@@ -435,85 +586,17 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 21),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                height: 1.57,
-              ),
-            ),
-          ),
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              Navigator.of(
-                context,
-              ).push(cinematicPageRoute(SeeAllMyListScreen(title: title)));
-            },
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Ver tudo',
-                    style: TextStyle(
-                      color: MyListScreen._lightMuted,
-                      fontSize: 13,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w500,
-                      height: 1.23,
-                    ),
-                  ),
-                  SizedBox(width: 2),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: MyListScreen._lightMuted,
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 14,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w500,
+        height: 1.57,
       ),
     );
   }
-}
-
-class _FeaturedItem {
-  const _FeaturedItem({
-    required this.image,
-    required this.title,
-    required this.subtitle,
-    this.opensSeriesWatch = false,
-  });
-
-  final String image;
-  final String title;
-  final String subtitle;
-  final bool opensSeriesWatch;
-}
-
-class _PosterItem {
-  const _PosterItem({
-    required this.image,
-    required this.bar,
-    required this.progress,
-  });
-
-  final String image;
-  final String bar;
-  final String progress;
 }
 
 class _MyListBottomNav extends StatelessWidget {
