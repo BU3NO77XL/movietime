@@ -2,18 +2,119 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../services/auth_service.dart';
+import '../services/content_service.dart';
+import '../widgets/home_bottom_nav.dart';
+import 'home_search.dart';
 import 'mylist.dart';
 import 'profile.dart';
 import 'screen_transitions.dart';
 import 'watch.dart';
-import '../widgets/home_bottom_nav.dart';
-import 'home_search.dart';
 
-/// Tela "Início" (Home) gerada a partir do código-fonte-da-home,
-/// com o mesmo estilo visual: fundo escuro, destaque central,
-/// categorias, carrosséis de filmes e barra de navegação inferior.
-class Home extends StatelessWidget {
+class Home extends StatefulWidget {
   const Home({super.key});
+
+  @override
+  State<Home> createState() => _HomeState();
+}
+
+class _HomeState extends State<Home> {
+  final AuthService _authService = AuthService();
+  final ContentService _contentService = ContentService();
+
+  bool _isLoading = true;
+  _HomeHeroItem? _heroItem;
+  List<_HomePosterItem> _continueWatching = const [];
+  List<_HomePosterItem> _trendingItems = const [];
+  List<_HomePosterItem> _topTenItems = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHome();
+  }
+
+  @override
+  void dispose() {
+    _authService.close();
+    _contentService.close();
+    super.dispose();
+  }
+
+  Future<void> _loadHome() async {
+    try {
+      final responses = await Future.wait([
+        _contentService.tmdb(
+          'trending/all/week',
+          query: const {'language': 'pt-BR'},
+        ),
+        _contentService.tmdb(
+          'trending/movie/week',
+          query: const {'language': 'pt-BR'},
+        ),
+        _contentService.tmdb(
+          'movie/top_rated',
+          query: const {'language': 'pt-BR', 'page': '1'},
+        ),
+      ]);
+
+      final trendingAll = _parseHomeItems(responses[0], fallbackMediaType: null);
+      final trendingMovies = _parseHomeItems(
+        responses[1],
+        fallbackMediaType: 'movie',
+      );
+      final topRatedMovies = _parseHomeItems(
+        responses[2],
+        fallbackMediaType: 'movie',
+      );
+
+      var continueWatching = <_HomePosterItem>[];
+      try {
+        final user = await _authService.profile();
+        final history = await _contentService.watchHistory(user.id);
+        continueWatching = [
+          for (final item in history.take(12))
+            _HomePosterItem(
+              tmdbId: item.tmdbId,
+              mediaType: _normalizeMediaType(item.mediaType),
+              title: item.title,
+              posterUrl: item.posterUrl,
+              backdropUrl: item.backdropUrl,
+              overview: null,
+            ),
+        ];
+      } catch (_) {}
+
+      if (!mounted) return;
+      setState(() {
+        _heroItem = trendingAll.isNotEmpty
+            ? _HomeHeroItem.fromPosterItem(trendingAll.first)
+            : null;
+        _continueWatching = continueWatching;
+        _trendingItems = trendingMovies.take(12).toList();
+        _topTenItems = topRatedMovies.take(10).toList();
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _openWatch(_HomePosterItem item) {
+    Navigator.of(context).push(
+      cinematicPageRoute(
+        WatchScreen(
+          tmdbId: item.tmdbId,
+          mediaType: item.mediaType,
+          title: item.title,
+          posterUrl: item.posterUrl,
+          backdropUrl: item.backdropUrl,
+          overview: item.overview,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,13 +145,9 @@ class Home extends StatelessWidget {
             return Stack(
               fit: StackFit.expand,
               children: [
-                // Base: fundo preto da tela (bg scroll do Figma)
                 const ColoredBox(color: Color(0xFF0D0D0D)),
-
-                // Área do blur: imagem borrada até o carrossel "Continue Assistindo"
-                // (hero blur clip do Figma - 914px de altura)
-                // Conteúdo scrollável
                 SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
                   child: Stack(
                     children: [
                       Positioned(
@@ -67,9 +164,10 @@ class Home extends StatelessWidget {
                                   sigmaX: 48,
                                   sigmaY: 48,
                                 ),
-                                child: Image.asset(
-                                  "assets/home/images/image-4929e57e7d013ce2bef71f7eaf6511776f15bbaf.png",
-                                  fit: BoxFit.cover,
+                                child: _RemoteBackdrop(
+                                  imageUrl: _heroItem?.backdropUrl,
+                                  fallbackAsset:
+                                      'assets/home/images/image-4929e57e7d013ce2bef71f7eaf6511776f15bbaf.png',
                                 ),
                               ),
                               Positioned(
@@ -99,13 +197,12 @@ class Home extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Cabeçalho: logo + título "Início" + ícones à direita
                           Padding(
                             padding: const EdgeInsets.fromLTRB(21, 58, 16, 12),
                             child: Row(
                               children: [
                                 Image.asset(
-                                  "assets/home/vectors/vector-2688-1528.png",
+                                  'assets/home/vectors/vector-2688-1528.png',
                                   width: headerLogoSize,
                                   height: headerLogoSize,
                                   fit: BoxFit.contain,
@@ -124,7 +221,7 @@ class Home extends StatelessWidget {
                                   ),
                                 ),
                                 Image.asset(
-                                  "assets/home/vectors/vector-2688-1548.png",
+                                  'assets/home/vectors/vector-2688-1548.png',
                                   width: headerIconSize,
                                   height: headerIconSize,
                                   fit: BoxFit.contain,
@@ -145,7 +242,7 @@ class Home extends StatelessWidget {
                                     );
                                   },
                                   child: Image.asset(
-                                    "assets/home/vectors/vector-2688-1549.png",
+                                    'assets/home/vectors/vector-2688-1549.png',
                                     width: headerIconSize,
                                     height: headerIconSize,
                                     fit: BoxFit.contain,
@@ -154,7 +251,6 @@ class Home extends StatelessWidget {
                               ],
                             ),
                           ),
-
                           SizedBox(
                             height: 48,
                             child: SingleChildScrollView(
@@ -217,57 +313,53 @@ class Home extends StatelessWidget {
                               ),
                             ),
                           ),
-
                           const SizedBox(height: 16),
-
-                          // Destaque principal (card hero)
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 22),
-                            child: _HeroCard(),
+                            child: _HeroCard(
+                              item: _heroItem,
+                              loading: _isLoading,
+                              onWatch: _heroItem == null
+                                  ? null
+                                  : () => _openWatch(_heroItem!),
+                              onMyListTap: () {
+                                Navigator.of(context).push(
+                                  cinematicPageRoute(const MyListScreen()),
+                                );
+                              },
+                            ),
                           ),
-
                           const SizedBox(height: 24),
-
-                          // Carrossel "Continue Assistindo"
                           const _SectionTitle(title: 'Continue Assistindo'),
                           const SizedBox(height: 12),
                           _PosterRow(
-                            images: const [
-                              "assets/home/images/image-0fa018d1465063ab7cd1fc1419c53cfc69a8891a.png",
-                              "assets/home/images/image-9dcfbaaf8cc2c3c348a5364db83832270486e1a0.png",
-                              "assets/home/images/image-ff8b37a14527480f375bc225f67fddfc58ed6f83.png",
-                              "assets/home/images/image-b654afd941c1b8341bdebd6896412e106b83e46e.png",
-                            ],
+                            items: _continueWatching,
+                            loading: _isLoading,
+                            emptyMessage:
+                                'Quando você começar a assistir, os títulos aparecem aqui.',
+                            onTap: _openWatch,
                           ),
-
                           const SizedBox(height: 24),
-
-                          // Carrossel "Em Alta"
                           const _SectionTitle(title: 'Em Alta'),
                           const SizedBox(height: 12),
                           _PosterRow(
-                            images: const [
-                              "assets/home/images/image-0de0dc59d9ec0472e71c82c6137e5e8eedf5a832.png",
-                              "assets/home/images/image-0839a5c3fb23f37997085d056599dd4899c04436.png",
-                              "assets/home/images/image-35dfeae3fe6baa198696331d2578f4e7c6fba1e7.png",
-                              "assets/home/images/image-d68712d3a36f2fbbfadfe378b9f557782090f3af.png",
-                            ],
+                            items: _trendingItems,
+                            loading: _isLoading,
+                            emptyMessage:
+                                'Não foi possível carregar os títulos em alta agora.',
+                            onTap: _openWatch,
                           ),
-
                           const SizedBox(height: 24),
-
-                          // Carrossel "Top 10 no Brasil"
                           const _SectionTitle(title: 'Top 10 no Brasil'),
                           const SizedBox(height: 12),
                           _PosterRow(
-                            images: const [
-                              "",
-                              "assets/home/images/image-9ad3cea5150db97346e72805978aaeefa3a32a3d.png",
-                              "assets/home/images/image-6ab8120ae3c8c35ba3a48812780635ba3ef599c0.png",
-                              "assets/home/images/image-d4bf417506f53feabc70b3ae27433dca7e23157f.png",
-                            ],
+                            items: _topTenItems,
+                            loading: _isLoading,
+                            emptyMessage:
+                                'Não foi possível carregar o Top 10 agora.',
+                            onTap: _openWatch,
+                            showRanking: true,
                           ),
-
                           const SizedBox(height: 24),
                         ],
                       ),
@@ -283,7 +375,6 @@ class Home extends StatelessWidget {
   }
 }
 
-/// Chip de filtro (Séries / Filmes / Novidades / Categorias).
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
     required this.label,
@@ -350,8 +441,19 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-/// Card de destaque principal (hero).
 class _HeroCard extends StatelessWidget {
+  const _HeroCard({
+    required this.item,
+    required this.loading,
+    required this.onWatch,
+    required this.onMyListTap,
+  });
+
+  final _HomeHeroItem? item;
+  final bool loading;
+  final VoidCallback? onWatch;
+  final VoidCallback onMyListTap;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -360,9 +462,10 @@ class _HeroCard extends StatelessWidget {
             .clamp(360.0, 487.0)
             .toDouble();
         final isCompactHero = constraints.maxWidth < 260;
-        final logoHeight = isCompactHero ? 104.0 : 120.0;
+        final titleFontSize = isCompactHero ? 24.0 : 30.0;
         final categoryFontSize = isCompactHero ? 13.0 : 14.0;
         final bottomSpacing = isCompactHero ? 10.0 : 16.0;
+        final genres = item?.genres.take(3).toList() ?? const <String>[];
 
         return Container(
           width: double.infinity,
@@ -389,9 +492,9 @@ class _HeroCard extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               Positioned.fill(
-                child: Image.asset(
-                  "assets/home/images/image-2687-1462.png",
-                  fit: BoxFit.cover,
+                child: _RemoteBackdrop(
+                  imageUrl: item?.backdropUrl,
+                  fallbackAsset: 'assets/home/images/image-2687-1462.png',
                 ),
               ),
               Positioned(
@@ -416,75 +519,83 @@ class _HeroCard extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Image.asset(
-                      "assets/home/images/image-2687-1465.png",
-                      width: double.infinity,
-                      height: logoHeight,
-                      fit: BoxFit.cover,
-                    ),
+                    if (loading)
+                      Container(
+                        width: double.infinity,
+                        height: 120,
+                        alignment: Alignment.center,
+                        child: const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          item?.title ?? 'MovieTime',
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: titleFontSize,
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w700,
+                            height: 1.08,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 8),
-                    // Título / categorias
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 4,
-                      children: [
-                        Text(
-                          'Udda',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: categoryFontSize,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w400,
-                          ),
+                    if (genres.isNotEmpty)
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 4,
+                        children: [
+                          for (var index = 0; index < genres.length; index++) ...[
+                            Text(
+                              genres[index],
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: categoryFontSize,
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                            if (index != genres.length - 1)
+                              Text(
+                                '•',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: categoryFontSize,
+                                ),
+                              ),
+                          ],
+                        ],
+                      )
+                    else
+                      Text(
+                        item?.mediaLabel ?? 'Em destaque',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: categoryFontSize,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w400,
                         ),
-                        Text(
-                          '•',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: categoryFontSize,
-                          ),
-                        ),
-                        Text(
-                          'Fyndig',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: categoryFontSize,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                        Text(
-                          '•',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: categoryFontSize,
-                          ),
-                        ),
-                        Text(
-                          'Mörk komedi',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: categoryFontSize,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
                     const SizedBox(height: 8),
-                    // Botões Assistir / Minha Lista
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
                           Expanded(
                             child: GestureDetector(
-                              onTap: () {
-                                Navigator.of(
-                                  context,
-                                ).push(cinematicPageRoute(const WatchScreen()));
-                              },
+                              onTap: onWatch,
                               child: Container(
                                 height: 40,
                                 padding: const EdgeInsets.symmetric(
@@ -523,11 +634,7 @@ class _HeroCard extends StatelessWidget {
                           const SizedBox(width: 12),
                           Expanded(
                             child: GestureDetector(
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  cinematicPageRoute(const MyListScreen()),
-                                );
-                              },
+                              onTap: onMyListTap,
                               child: Container(
                                 height: 40,
                                 padding: const EdgeInsets.symmetric(
@@ -578,7 +685,26 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-/// Título de seção dos carrosséis.
+class _RemoteBackdrop extends StatelessWidget {
+  const _RemoteBackdrop({required this.imageUrl, required this.fallbackAsset});
+
+  final String? imageUrl;
+  final String fallbackAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl == null || imageUrl!.isEmpty) {
+      return Image.asset(fallbackAsset, fit: BoxFit.cover);
+    }
+
+    return Image.network(
+      imageUrl!,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Image.asset(fallbackAsset, fit: BoxFit.cover),
+    );
+  }
+}
+
 class _HomeSearchDrawer extends StatelessWidget {
   const _HomeSearchDrawer();
 
@@ -621,42 +747,201 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-/// Linha de pôsteres (carrossel horizontal).
 class _PosterRow extends StatelessWidget {
-  const _PosterRow({required this.images});
+  const _PosterRow({
+    required this.items,
+    required this.loading,
+    required this.emptyMessage,
+    required this.onTap,
+    this.showRanking = false,
+  });
 
-  final List<String> images;
+  final List<_HomePosterItem> items;
+  final bool loading;
+  final String emptyMessage;
+  final ValueChanged<_HomePosterItem> onTap;
+  final bool showRanking;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       height: 180,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: images.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 16),
-        itemBuilder: (context, index) {
-          final image = images[index];
-          return Container(
-            width: 120,
-            height: 180,
-            clipBehavior: Clip.antiAlias,
-            decoration: ShapeDecoration(
-              color: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+      child: loading
+          ? ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: 4,
+              separatorBuilder: (context, index) => const SizedBox(width: 16),
+              itemBuilder: (context, index) => Container(
+                width: 120,
+                height: 180,
+                decoration: ShapeDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
               ),
-              image: image.isEmpty
-                  ? null
-                  : DecorationImage(
-                      image: AssetImage(image),
-                      fit: BoxFit.cover,
-                    ),
+            )
+          : items.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: ShapeDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  emptyMessage,
+                  style: const TextStyle(
+                    color: Color(0xB3FFFFFF),
+                    fontSize: 13,
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            )
+          : ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: items.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 16),
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onTap(item),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 180,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: ShapeDecoration(
+                          color: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: item.posterUrl == null || item.posterUrl!.isEmpty
+                            ? Container(color: const Color(0xFF1A1A1A))
+                            : Image.network(
+                                item.posterUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                  color: const Color(0xFF1A1A1A),
+                                ),
+                              ),
+                      ),
+                      if (showRanking)
+                        Positioned(
+                          left: -4,
+                          bottom: -8,
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.18),
+                              fontSize: 72,
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w700,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
+}
+
+class _HomePosterItem {
+  const _HomePosterItem({
+    required this.tmdbId,
+    required this.mediaType,
+    required this.title,
+    this.posterUrl,
+    this.backdropUrl,
+    this.overview,
+  });
+
+  final int tmdbId;
+  final String mediaType;
+  final String title;
+  final String? posterUrl;
+  final String? backdropUrl;
+  final String? overview;
+}
+
+class _HomeHeroItem extends _HomePosterItem {
+  const _HomeHeroItem({
+    required super.tmdbId,
+    required super.mediaType,
+    required super.title,
+    super.posterUrl,
+    super.backdropUrl,
+    super.overview,
+    this.genres = const [],
+  });
+
+  factory _HomeHeroItem.fromPosterItem(_HomePosterItem item) {
+    return _HomeHeroItem(
+      tmdbId: item.tmdbId,
+      mediaType: item.mediaType,
+      title: item.title,
+      posterUrl: item.posterUrl,
+      backdropUrl: item.backdropUrl,
+      overview: item.overview,
+      genres: const [],
+    );
+  }
+
+  final List<String> genres;
+
+  String get mediaLabel => mediaType == 'tv' ? 'Série' : 'Filme';
+}
+
+List<_HomePosterItem> _parseHomeItems(
+  Map<String, dynamic> json, {
+  required String? fallbackMediaType,
+}) {
+  final results = json['results'];
+  if (results is! List<dynamic>) return const [];
+
+  return [
+    for (final item in results)
+      if (item is Map<String, dynamic>)
+        _HomePosterItem(
+          tmdbId: (item['id'] as num?)?.toInt() ?? 0,
+          mediaType: _normalizeMediaType(
+            item['media_type']?.toString() ?? fallbackMediaType ?? 'movie',
+          ),
+          title: (item['title'] ?? item['name'] ?? 'Título').toString(),
+          posterUrl: _tmdbImageUrl(item['poster_path']?.toString()),
+          backdropUrl: _tmdbImageUrl(
+            item['backdrop_path']?.toString(),
+            size: 'w1280',
+          ),
+          overview: item['overview']?.toString(),
+        ),
+  ].where((item) => item.tmdbId > 0).toList();
+}
+
+String _normalizeMediaType(String mediaType) {
+  return mediaType == 'series' ? 'tv' : mediaType;
+}
+
+String? _tmdbImageUrl(String? path, {String size = 'w780'}) {
+  if (path == null || path.isEmpty) return null;
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return 'https://image.tmdb.org/t/p/$size$path';
 }
