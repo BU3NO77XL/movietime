@@ -10,6 +10,15 @@ import NetflixAvatar from '../NetflixAvatar';
 import SearchOverlay from './SearchOverlay';
 import InstallButton from './InstallButton';
 
+type StoredUserData = {
+    id?: number;
+    name: string;
+    email: string;
+    role?: string;
+    avatarUrl?: string | null;
+    preferences?: { avatarIndex?: number; genres?: string[] } | null;
+} | null;
+
 const HEADER_ITEMS = [
     { label: 'Início', href: '/' },
     { label: 'Séries', href: '/?filter=series' },
@@ -28,16 +37,67 @@ const Header = memo(function Header() {
     const [searchOpen, setSearchOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
     const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-    const [userData, setUserData] = useState<{ name: string; email: string; role?: string; avatarUrl?: string | null; preferences?: { avatarIndex?: number; genres?: string } | null } | null>(() => {
-      try {
-        if (typeof window === 'undefined') return null;
-        const stored = localStorage.getItem('userBasicInfo');
-        return stored ? JSON.parse(stored) : null;
-      } catch { return null; }
-    });
+    const readStoredUserData = useCallback((): StoredUserData => {
+        try {
+            if (typeof window === 'undefined') return null;
+            const stored = localStorage.getItem('userBasicInfo');
+            return stored ? JSON.parse(stored) : null;
+        } catch {
+            return null;
+        }
+    }, []);
+    const [userData, setUserData] = useState<StoredUserData>(() => readStoredUserData());
     const scrollRafRef = useRef<number | null>(null);
 
     useEffect(() => { setMounted(true); }, []);
+
+    useEffect(() => {
+        const syncUserData = () => setUserData(readStoredUserData());
+
+        syncUserData();
+        window.addEventListener('storage', syncUserData);
+        window.addEventListener('focus', syncUserData);
+        window.addEventListener('userDataUpdated', syncUserData as EventListener);
+
+        return () => {
+            window.removeEventListener('storage', syncUserData);
+            window.removeEventListener('focus', syncUserData);
+            window.removeEventListener('userDataUpdated', syncUserData as EventListener);
+        };
+    }, [readStoredUserData]);
+
+    useEffect(() => {
+        if (!mounted || !userData) return;
+
+        let cancelled = false;
+
+        const refreshProfile = async () => {
+            try {
+                const response = await fetch('/api/auth/profile', { cache: 'no-store' });
+                if (!response.ok) return;
+
+                const data = await response.json();
+                if (!data.user || cancelled) return;
+
+                const nextUserData = {
+                    ...userData,
+                    ...data.user,
+                    preferences: data.user.preferences ?? userData.preferences ?? null,
+                };
+
+                localStorage.setItem('userBasicInfo', JSON.stringify(nextUserData));
+                setUserData(nextUserData);
+            } catch {
+                // silent: keep local data if refresh fails
+            }
+        };
+
+        refreshProfile();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [mounted, pathname, readStoredUserData, userData?.id]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -217,7 +277,12 @@ const Header = memo(function Header() {
                                         className="flex items-center gap-2"
                                     >
                                         <div className="relative">
-                                            <NetflixAvatar name={userData?.name || 'User'} selectedIndex={userData?.preferences?.avatarIndex ?? null} size={36} />
+                                            <NetflixAvatar
+                                                name={userData?.name || 'User'}
+                                                avatarUrl={userData?.avatarUrl || null}
+                                                selectedIndex={userData?.preferences?.avatarIndex ?? null}
+                                                size={36}
+                                            />
                                             {userData?.role === 'admin' && (
                                                 <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-yellow-500 rounded-full flex items-center justify-center ring-2 ring-[#0a0a0a]">
                                                     <Star className="w-2 h-2 text-black fill-current" />
@@ -283,6 +348,7 @@ const Header = memo(function Header() {
                                                             localStorage.removeItem('sb-session');
                                                             localStorage.removeItem('userBasicInfo');
                                                             localStorage.removeItem('userPreferences');
+                                                            window.dispatchEvent(new Event('userDataUpdated'));
                                                             setUserData(null);
                                                             window.location.href = '/login';
                                                         }}

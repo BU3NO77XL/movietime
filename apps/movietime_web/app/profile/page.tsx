@@ -25,6 +25,7 @@ export default function ProfilePage() {
   });
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarIndex, setAvatarIndex] = useState<number | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [genres, setGenres] = useState<string[]>([]);
@@ -43,6 +44,7 @@ export default function ProfilePage() {
       const info = JSON.parse(raw);
       setUserName(info.name || '');
       setUserEmail(info.email || '');
+      setAvatarUrl(info.avatarUrl || null);
       setAvatarIndex(info.preferences?.avatarIndex ?? null);
       setGenres(info.preferences?.genres || []);
       setUserRole(info.role || null);
@@ -61,6 +63,7 @@ export default function ProfilePage() {
           if (p.user) {
             setUserName(p.user.name || userName);
             setUserEmail(p.user.email || userEmail);
+            setAvatarUrl(p.user.avatarUrl || null);
             setCreatedAt(p.user.createdAt || null);
             if (p.user.preferences?.avatarIndex != null) setAvatarIndex(p.user.preferences.avatarIndex);
             if (p.user.preferences?.genres?.length) setGenres(p.user.preferences.genres);
@@ -128,7 +131,12 @@ export default function ProfilePage() {
         {/* Profile Header */}
         <div className="bg-[#1a1a1a] rounded-xl p-6 sm:p-8 mb-8 flex flex-col sm:flex-row items-center sm:items-start gap-6">
           <div className="relative shrink-0">
-            <NetflixAvatar name={userName} selectedIndex={avatarIndex} size={96} />
+            <NetflixAvatar
+              name={userName}
+              avatarUrl={avatarUrl}
+              selectedIndex={avatarIndex}
+              size={96}
+            />
             {userRole === 'admin' && (
               <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center ring-2 ring-[#1a1a1a]">
                 <Star className="w-3 h-3 text-black fill-current" />

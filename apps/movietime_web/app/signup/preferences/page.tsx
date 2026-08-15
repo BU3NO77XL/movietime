@@ -87,6 +87,7 @@ export default function PreferencesPage() {
         avatar: selectedAvatar,
         genres: selectedGenres,
       }));
+      window.dispatchEvent(new Event('userDataUpdated'));
 
       toast.success('Preferências salvas! Bem-vindo ao Legacy Mov.');
       router.push('/');

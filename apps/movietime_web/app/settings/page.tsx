@@ -71,6 +71,7 @@ export default function SettingsPage() {
       const info = JSON.parse(localStorage.getItem('userBasicInfo') || '{}');
       info.name = nameInput.trim();
       localStorage.setItem('userBasicInfo', JSON.stringify(info));
+      window.dispatchEvent(new Event('userDataUpdated'));
       setUserName(nameInput.trim());
       setEditingName(false);
       toast.success('Nome atualizado!');
@@ -105,6 +106,7 @@ export default function SettingsPage() {
       info.preferences = { avatarIndex: selectedAvatar, genres: selectedGenres };
       localStorage.setItem('userBasicInfo', JSON.stringify(info));
       localStorage.setItem('userPreferences', JSON.stringify({ avatar: selectedAvatar, genres: selectedGenres }));
+      window.dispatchEvent(new Event('userDataUpdated'));
       toast.success('Preferências salvas!');
     } catch {
       toast.error('Erro de conexão.');

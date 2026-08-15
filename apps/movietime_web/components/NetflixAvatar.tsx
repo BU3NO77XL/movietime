@@ -4,6 +4,7 @@ import { NETFLIX_AVATARS } from '@/lib/avatars';
 
 interface NetflixAvatarProps {
     name?: string;
+    avatarUrl?: string | null;
     selectedIndex?: number | null;
     size?: number;
     className?: string;
@@ -11,12 +12,17 @@ interface NetflixAvatarProps {
 
 export default function NetflixAvatar({
     name = "User",
+    avatarUrl,
     selectedIndex,
     size = 40,
     className
 }: NetflixAvatarProps) {
 
-    const avatarUrl = useMemo(() => {
+    const resolvedAvatarUrl = useMemo(() => {
+        if (avatarUrl && avatarUrl.trim()) {
+            return avatarUrl;
+        }
+
         if (typeof selectedIndex === 'number' && selectedIndex >= 0 && selectedIndex < NETFLIX_AVATARS.length) {
             return NETFLIX_AVATARS[selectedIndex];
         }
@@ -26,7 +32,7 @@ export default function NetflixAvatar({
         }
         const index = Math.abs(hash) % NETFLIX_AVATARS.length;
         return NETFLIX_AVATARS[index];
-    }, [name, selectedIndex]);
+    }, [avatarUrl, name, selectedIndex]);
 
     return (
         <div
@@ -41,7 +47,7 @@ export default function NetflixAvatar({
             }}
         >
             <img
-                src={avatarUrl}
+                src={resolvedAvatarUrl}
                 alt={`Avatar de ${name}`}
                 className="w-full h-full object-cover object-center"
                 draggable={false}

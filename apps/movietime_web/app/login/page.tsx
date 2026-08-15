@@ -106,6 +106,7 @@ export default function LoginPage() {
           genres: data.user.preferences.genres,
         }));
       }
+      window.dispatchEvent(new Event('userDataUpdated'));
       toast.success('Login realizado com sucesso! Bem-vindo ao Legacy Mov.');
       router.push('/');
     } catch {
@@ -172,6 +173,7 @@ export default function LoginPage() {
         avatarUrl: data.user.avatarUrl || null,
         preferences: data.user.preferences || null,
       }));
+      window.dispatchEvent(new Event('userDataUpdated'));
       toast.success('Conta criada com sucesso!');
       router.push('/signup/preferences');
     } catch {
