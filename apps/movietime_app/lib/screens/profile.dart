@@ -95,18 +95,9 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  static const _fallbackProfile = ProfileScreenData(
-    id: 0,
-    name: 'Usuário MovieTime',
-    email: 'email@example.com',
-    role: 'client',
-    avatarIndex: 0,
-    genres: [],
-  );
-
   late final AuthService _authService;
   late final bool _ownsAuthService;
-  late ProfileScreenData _profile;
+  ProfileScreenData? _profile;
   bool _isLoading = true;
   bool _isRefreshing = false;
   String? _errorMessage;
@@ -116,7 +107,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _ownsAuthService = widget.authService == null;
     _authService = widget.authService ?? AuthService();
-    _profile = widget.initialProfile ?? _fallbackProfile;
+    _profile = widget.initialProfile;
     _isLoading = widget.initialProfile == null;
 
     if (widget.initialProfile == null) {
@@ -162,12 +153,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _isLoading = false;
         _isRefreshing = false;
-        _errorMessage = 'Não foi possível carregar seu perfil agora.';
+        _errorMessage =
+            'N\u00e3o foi poss\u00edvel carregar seu perfil agora.';
       });
     }
   }
 
   Future<void> _openEditProfileDrawer(BuildContext context) {
+    final profile = _profile;
+    if (profile == null) {
+      return Future<void>.value();
+    }
+
     return showModalBottomSheet<void>(
       context: context,
       enableDrag: true,
@@ -176,7 +173,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black54,
       builder: (context) => _EditProfileDrawer(
-        profile: _profile,
+        profile: profile,
         onSave: _saveProfileEdits,
         useRemoteAvatars: widget.useRemoteAvatars,
       ),
@@ -184,26 +181,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _saveProfileEdits(String name, int avatarIndex) async {
+    final currentProfile = _profile;
+    if (currentProfile == null) {
+      throw const ApiException('Perfil indispon\u00edvel no momento.');
+    }
+
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
-      throw const ApiException('Digite um nome válido.');
+      throw const ApiException('Digite um nome v\u00e1lido.');
     }
 
     final avatarChangedWithoutGenres =
-        avatarIndex != _profile.avatarIndex && _profile.genres.length < 3;
+        avatarIndex != currentProfile.avatarIndex &&
+        currentProfile.genres.length < 3;
 
     final updatedUser = await _authService.updateProfile(
-      userId: _profile.id == 0 ? null : _profile.id,
+      userId: currentProfile.id == 0 ? null : currentProfile.id,
       name: trimmedName,
     );
 
-    if (avatarIndex != _profile.avatarIndex &&
-        _profile.id != 0 &&
-        _profile.genres.length >= 3) {
+    if (avatarIndex != currentProfile.avatarIndex &&
+        currentProfile.id != 0 &&
+        currentProfile.genres.length >= 3) {
       await _authService.savePreferences(
-        userId: _profile.id,
+        userId: currentProfile.id,
         avatarIndex: avatarIndex,
-        genres: _profile.genres,
+        genres: currentProfile.genres,
       );
     }
 
@@ -211,11 +214,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final nextProfile = ProfileScreenData.fromAuthUser(updatedUser).copyWith(
       avatarIndex: avatarIndex,
-      genres: updatedUser.preferences?.genres ?? _profile.genres,
-      createdAt: updatedUser.createdAt ?? _profile.createdAt,
+      genres: updatedUser.preferences?.genres ?? currentProfile.genres,
+      createdAt: updatedUser.createdAt ?? currentProfile.createdAt,
       recommendationsUpdatedAt:
           updatedUser.preferences?.recommendationsUpdatedAt ??
-          _profile.recommendationsUpdatedAt,
+          currentProfile.recommendationsUpdatedAt,
     );
 
     setState(() => _profile = nextProfile);
@@ -227,7 +230,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SnackBar(
           content: Text(
             avatarChangedWithoutGenres
-                ? 'Nome salvo. Para persistir avatar, defina 3 gêneros em Configurações.'
+                ? 'Nome salvo. Para persistir avatar, defina 3 g\u00eaneros em Configura\u00e7\u00f5es.'
                 : 'Perfil atualizado com sucesso.',
           ),
           behavior: SnackBarBehavior.floating,
@@ -245,7 +248,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ..showSnackBar(
         const SnackBar(
           content: Text(
-            'Acessos administrativos ainda não estão disponíveis no app Flutter.',
+            'Acessos administrativos ainda n\u00e3o est\u00e3o dispon\u00edveis no app Flutter.',
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -254,6 +257,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = _profile;
+    final hasProfile = profile != null;
+
     return Scaffold(
       backgroundColor: _bg,
       bottomNavigationBar: HomeBottomNav(
@@ -305,51 +311,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 40),
                     _ProfileSummaryCard(
-                      profile: _profile,
+                      profile: profile,
                       loading: _isLoading,
                       errorMessage: _errorMessage,
                       onRetry: () => _loadProfile(refresh: true),
-                      onEditTap: () => _openEditProfileDrawer(context),
+                      onEditTap: hasProfile
+                          ? () => _openEditProfileDrawer(context)
+                          : null,
                       onAdminTap: () => _openAdminAccess(context),
                       useRemoteAvatars: widget.useRemoteAvatars,
                     ),
-                    const SizedBox(height: 40),
-                    const _ProfileSection(title: 'Information'),
-                    _SettingsCard(
-                      children: [
-                        _SettingsRow(
-                          label: 'Email address',
-                          value: _profile.email,
-                        ),
-                        _SettingsRow(
-                          label: 'Member since',
-                          value: _formatMemberSince(_profile.createdAt),
-                        ),
-                        _SettingsRow(
-                          label: 'Account type',
-                          value: _formatRole(_profile.role),
-                          showDivider: false,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 40),
-                    const _ProfileSection(title: 'Preferences'),
-                    _SettingsCard(
-                      children: [
-                        _SettingsRow(
-                          label: 'Favorite genres',
-                          value: _profile.genres.isEmpty
-                              ? 'Not configured'
-                              : _profile.genres.join(', '),
-                        ),
-                        _SettingsRow(
-                          label: 'Avatar profile',
-                          value: 'Avatar #${_profile.avatarIndex + 1}',
-                          action: 'Edit profile',
-                          showDivider: false,
-                        ),
-                      ],
-                    ),
+                    if (hasProfile) ...[
+                      const SizedBox(height: 40),
+                      const _ProfileSection(title: 'Information'),
+                      _SettingsCard(
+                        children: [
+                          _SettingsRow(
+                            label: 'Email address',
+                            value: profile.email,
+                          ),
+                          _SettingsRow(
+                            label: 'Member since',
+                            value: _formatMemberSince(profile.createdAt),
+                          ),
+                          _SettingsRow(
+                            label: 'Account type',
+                            value: _formatRole(profile.role),
+                            showDivider: false,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 40),
+                      const _ProfileSection(title: 'Preferences'),
+                      _SettingsCard(
+                        children: [
+                          _SettingsRow(
+                            label: 'Favorite genres',
+                            value: profile.genres.isEmpty
+                                ? 'Not configured'
+                                : profile.genres.join(', '),
+                          ),
+                          _SettingsRow(
+                            label: 'Avatar profile',
+                            value: 'Avatar #${profile.avatarIndex + 1}',
+                            action: 'Edit profile',
+                            showDivider: false,
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 40),
                     const _ProfileSection(title: 'Support'),
                     const _SettingsCard(
@@ -463,16 +473,18 @@ class _ProfileSummaryCard extends StatelessWidget {
     required this.useRemoteAvatars,
   });
 
-  final ProfileScreenData profile;
+  final ProfileScreenData? profile;
   final bool loading;
   final String? errorMessage;
   final Future<void> Function() onRetry;
-  final VoidCallback onEditTap;
+  final VoidCallback? onEditTap;
   final VoidCallback onAdminTap;
   final bool useRemoteAvatars;
 
   @override
   Widget build(BuildContext context) {
+    final profile = this.profile;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
@@ -489,15 +501,20 @@ class _ProfileSummaryCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _ProfileAvatar(
-            avatarIndex: profile.avatarIndex,
-            isAdmin: profile.role.toLowerCase() == 'admin',
-            useRemoteAvatar: useRemoteAvatars,
-          ),
-          const SizedBox(height: 18),
           if (loading)
             const _SummaryLoadingState()
+          else if (profile == null)
+            _ProfileUnavailableState(
+              message: errorMessage ?? 'Erro ao carregar dados.',
+              onRetry: onRetry,
+            )
           else ...[
+            _ProfileAvatar(
+              avatarIndex: profile.avatarIndex,
+              isAdmin: profile.role.toLowerCase() == 'admin',
+              useRemoteAvatar: useRemoteAvatars,
+            ),
+            const SizedBox(height: 18),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -597,7 +614,7 @@ class _ProfileSummaryCard extends StatelessWidget {
             _ProfileActionButton(
               icon: Icons.settings_outlined,
               label: 'Editar perfil',
-              onTap: onEditTap,
+              onTap: onEditTap ?? () {},
             ),
             if (profile.role.toLowerCase() == 'admin') ...[
               const SizedBox(height: 10),
@@ -626,6 +643,16 @@ class _SummaryLoadingState extends StatelessWidget {
     return Column(
       children: [
         Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            color: Colors.white10,
+            shape: BoxShape.circle,
+            border: Border.all(color: _border),
+          ),
+        ),
+        const SizedBox(height: 18),
+        Container(
           width: 150,
           height: 18,
           decoration: BoxDecoration(
@@ -641,6 +668,79 @@ class _SummaryLoadingState extends StatelessWidget {
             color: Colors.white10,
             borderRadius: BorderRadius.circular(999),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileUnavailableState extends StatelessWidget {
+  const _ProfileUnavailableState({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Icon(
+          Icons.cloud_off_rounded,
+          color: Color(0xFFBDBDBD),
+          size: 48,
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Erro ao carregar dados',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w600,
+            height: 1.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Color(0xFFBDBDBD),
+            fontSize: 13,
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w400,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Tente novamente mais tarde.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Color(0xFF9E9E9E),
+            fontSize: 12,
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w400,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 18),
+        OutlinedButton.icon(
+          onPressed: () {
+            onRetry();
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: _border),
+            backgroundColor: const Color(0x14FFFFFF),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+          label: const Text('Tentar novamente'),
         ),
       ],
     );
@@ -941,7 +1041,9 @@ class _EditProfileSheetBodyState extends State<_EditProfileSheetBody> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           const SnackBar(
-            content: Text('Não foi possível salvar seu perfil agora.'),
+            content: Text(
+              'N\u00e3o foi poss\u00edvel salvar seu perfil agora.',
+            ),
             backgroundColor: Color(0xFFAD2536),
             behavior: SnackBarBehavior.floating,
           ),
