@@ -93,15 +93,6 @@ class _SignUpEmailState extends State<SignUpEmail> {
 
     if (error != null) {
       setState(() => _fieldError = error);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(error),
-            backgroundColor: const Color(0xFFAD2536),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
       return;
     }
 
@@ -142,28 +133,10 @@ class _SignUpEmailState extends State<SignUpEmail> {
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() => _fieldError = error.message);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(error.message),
-            backgroundColor: const Color(0xFFAD2536),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
     } catch (_) {
       if (!mounted) return;
       const message = 'Não foi possível criar a conta agora.';
       setState(() => _fieldError = message);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(message),
-            backgroundColor: Color(0xFFAD2536),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -191,6 +164,25 @@ class _SignUpEmailState extends State<SignUpEmail> {
                   children: [
                     // Fundo preto base
                     const ColoredBox(color: Color(0xFF0D0D0D)),
+
+                    if (_fieldError != null)
+                      Positioned(
+                        left: transform.mapX(24),
+                        top: transform.mapY(78),
+                        child: Transform.scale(
+                          scale: transform.scale,
+                          alignment: Alignment.topLeft,
+                          child: SizedBox(
+                            width: 342,
+                            height: 50,
+                            child: _ErrorAlert(
+                              message: _fieldError!,
+                              onClose: () =>
+                                  setState(() => _fieldError = null),
+                            ),
+                          ),
+                        ),
+                      ),
 
                     // Glow roxo (Ellipse 1500, x=-145, y=-155, blur 300, roxo 20%)
                     Positioned(
@@ -382,6 +374,54 @@ class _SignUpEmailState extends State<SignUpEmail> {
             },
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ErrorAlert extends StatelessWidget {
+  const _ErrorAlert({required this.message, required this.onClose});
+
+  final String message;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 15),
+      decoration: BoxDecoration(
+        color: const Color(0xFFAD2536),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFAD2536), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, size: 20, color: Colors.white),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w500,
+                height: 1.3333,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+          InkWell(
+            onTap: onClose,
+            borderRadius: BorderRadius.circular(10),
+            child: const Padding(
+              padding: EdgeInsets.all(2),
+              child: Icon(Icons.close, size: 20, color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }
