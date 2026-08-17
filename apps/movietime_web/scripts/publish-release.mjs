@@ -48,17 +48,72 @@ const supabase = createClient(supabaseUrl, secretKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-console.log('Publicando ' + apkName + ' (' + (fileInfo.size / 1024 / 1024).toFixed(2) + ' MB)...');
+async function uploadResumable() {
+  const supabaseUrlObject = new URL(supabaseUrl);
+  const storageHost = supabaseUrlObject.hostname.replace(
+    '.supabase.co',
+    '.storage.supabase.co',
+  );
+  const uploadUrl = 'https://' + storageHost + '/storage/v1/upload/resumable';
+  const file = readFileSync(apkPath);
+  const metadata = [
+    ['bucketName', 'app-releases'],
+    ['objectName', releasePath],
+    ['contentType', 'application/vnd.android.package-archive'],
+  ]
+    .map(([key, value]) => key + ' ' + Buffer.from(value).toString('base64'))
+    .join(',');
 
-const { error: uploadError } = await supabase.storage
-  .from('app-releases')
-  .upload(releasePath, createReadStream(apkPath), {
-    cacheControl: '3600',
-    contentType: 'application/vnd.android.package-archive',
-    upsert: true,
+  const createResponse = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + secretKey,
+      'Tus-Resumable': '1.0.0',
+      'Upload-Length': String(file.length),
+      'Upload-Metadata': metadata,
+      'x-upsert': 'true',
+    },
   });
 
-if (uploadError) throw new Error('Falha no upload: ' + uploadError.message);
+  if (!createResponse.ok) {
+    throw new Error('Falha ao iniciar upload resumivel: ' + await createResponse.text());
+  }
+
+  const locationHeader = createResponse.headers.get('Location');
+  if (!locationHeader) throw new Error('Supabase nao retornou a URL do upload.');
+  const location = new URL(locationHeader, uploadUrl).toString();
+  const chunkSize = 8 * 1024 * 1024;
+  let offset = 0;
+
+  while (offset < file.length) {
+    const chunk = file.subarray(offset, Math.min(offset + chunkSize, file.length));
+    const patchResponse = await fetch(location, {
+      method: 'PATCH',
+      headers: {
+        Authorization: 'Bearer ' + secretKey,
+        'Tus-Resumable': '1.0.0',
+        'Upload-Offset': String(offset),
+        'Content-Type': 'application/offset+octet-stream',
+      },
+      body: chunk,
+    });
+
+    if (!patchResponse.ok) {
+      throw new Error('Falha no bloco do upload: ' + await patchResponse.text());
+    }
+
+    const nextOffset = Number(patchResponse.headers.get('Upload-Offset'));
+    if (!Number.isFinite(nextOffset) || nextOffset <= offset) {
+      throw new Error('Supabase retornou um offset invalido.');
+    }
+
+    offset = nextOffset;
+    console.log('Upload: ' + Math.round((offset / file.length) * 100) + '%');
+  }
+}
+
+console.log('Publicando ' + apkName + ' (' + (fileInfo.size / 1024 / 1024).toFixed(2) + ' MB)...');
+await uploadResumable();
 
 const { error: deactivateError } = await supabase
   .from('app_releases')
