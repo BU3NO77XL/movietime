@@ -4,7 +4,7 @@ import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 
 import '../services/avatar_catalog.dart';
-import '../widgets/authenticated_avatar_image.dart';
+import '../widgets/local_avatar_image.dart';
 import '../widgets/intro_shared.dart';
 import 'choose_your_plan.dart';
 
@@ -56,264 +56,266 @@ class _ControlProfileState extends State<ControlProfile> {
     // para telas menores. Assim, fontes de acessibilidade nÃ£o estouram os
     // containers fixos do layout e a tela continua sendo escalada inteira.
     return MediaQuery(
-      data: MediaQuery.of(context).copyWith(
-        textScaler: TextScaler.noScaling,
-      ),
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
       child: Scaffold(
         backgroundColor: const Color(0xFF0D0D0D),
         body: SafeArea(
           child: LayoutBuilder(
-          builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, constraints.maxHeight);
-          final transform = DesignTransform.fromSize(size);
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, constraints.maxHeight);
+              final transform = DesignTransform.fromSize(size);
 
-          return SizedBox(
-            width: size.width,
-            height: size.height,
-            child: Stack(
-              fit: StackFit.expand,
-              clipBehavior: Clip.none,
-              children: [
-                // Fundo preto base
-                const ColoredBox(color: Color(0xFF0D0D0D)),
+              return SizedBox(
+                width: size.width,
+                height: size.height,
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Fundo preto base
+                    const ColoredBox(color: Color(0xFF0D0D0D)),
 
-                // Glow cinza (Ellipse 1500, x=215, y=-144, 350×350, blur 300)
-                Positioned(
-                  left: transform.mapX(215),
-                  top: transform.mapY(-144),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                      child: Container(
-                        width: 350,
-                        height: 350,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF2C2C2C),
+                    // Glow cinza (Ellipse 1500, x=215, y=-144, 350×350, blur 300)
+                    Positioned(
+                      left: transform.mapX(215),
+                      top: transform.mapY(-144),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 300,
+                            sigmaY: 300,
+                          ),
+                          child: Container(
+                            width: 350,
+                            height: 350,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFF2C2C2C),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Barra de progresso (x=24, y=80, 342×3)
-                Positioned(
-                  left: transform.mapX(24),
-                  top: transform.mapY(80),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: const SizedBox(
-                      width: 342,
-                      height: 3,
-                      child: Row(
-                        children: [
-                          // Segmento 1 (110px, branco 20%)
-                          _ProgressSegment(width: 110, active: false),
-                          SizedBox(width: 5),
-                          // Segmento 2 ativo (111px, branco com sombra roxa)
-                          _ProgressSegment(width: 111, active: true),
-                          SizedBox(width: 5),
-                          // Segmento 3 (111px, branco 20%)
-                          _ProgressSegment(width: 111, active: false),
-                        ],
+                    // Barra de progresso (x=24, y=80, 342×3)
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(80),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: const SizedBox(
+                          width: 342,
+                          height: 3,
+                          child: Row(
+                            children: [
+                              // Segmento 1 (110px, branco 20%)
+                              _ProgressSegment(width: 110, active: false),
+                              SizedBox(width: 5),
+                              // Segmento 2 ativo (111px, branco com sombra roxa)
+                              _ProgressSegment(width: 111, active: true),
+                              SizedBox(width: 5),
+                              // Segmento 3 (111px, branco 20%)
+                              _ProgressSegment(width: 111, active: false),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Título + subtítulo (x=65, y=123, 260×95)
-                Positioned(
-                  left: transform.mapX(65),
-                  top: transform.mapY(123),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: const SizedBox(
-                      width: 260,
-                      height: 95,
-                      child: Column(
-                        children: [
-                          Text(
-                            'Escolha sua foto',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w600,
-                              height: 1.4167, // 34/24
-                              letterSpacing: 0,
+                    // Título + subtítulo (x=65, y=123, 260×95)
+                    Positioned(
+                      left: transform.mapX(65),
+                      top: transform.mapY(123),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: const SizedBox(
+                          width: 260,
+                          height: 95,
+                          child: Column(
+                            children: [
+                              Text(
+                                'Escolha sua foto',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontFamily: 'Netflix Sans',
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.4167, // 34/24
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              Text(
+                                'Sem compromissos, cancele quando quiser.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFF9E9E9E),
+                                  fontSize: 14,
+                                  fontFamily: 'Netflix Sans',
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.5714, // 22/14
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Imagem principal (x=120, y=260, 150×220, raio 21.645)
+                    Positioned(
+                      left: transform.mapX(120),
+                      top: transform.mapY(260),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: Container(
+                          width: 150,
+                          height: 220,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(21.645),
+                            border: Border.all(
+                              color: const Color(0xFF262626),
+                              width: 1.557,
                             ),
                           ),
-                          SizedBox(height: 5),
-                          Text(
-                            'Sem compromissos, cancele quando quiser.',
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(21.645),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                LocalAvatarImage(
+                                  avatarIndex: _selectedThumb,
+                                  fit: BoxFit.cover,
+                                ),
+                                // Overlay #0d0d0d 20%
+                                const ColoredBox(color: Color(0x330D0D0D)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Miniaturas (Group 2085663462, x=24.427, y=601, 382.138×93)
+                    // A miniatura selecionada (1ª) é maior: 73.146×93 com opacity 1.
+                    // As demais: 64.783×82.366 com opacity 0.5.
+                    // Gaps: 11.427, 13.0, 12.912, 12.522.
+                    // Carousel finito: rola até o último avatar (mostrado completo
+                    // graças ao padding final) e para, no estilo clássico, sem
+                    // voltar ao primeiro item.
+                    Positioned(
+                      left: transform.mapX(24.427),
+                      top: transform.mapY(601),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: 382.138,
+                          height: 93,
+                          child: _AvatarCarousel(
+                            avatarIndexes: _thumbImages,
+                            gaps: _thumbGaps,
+                            selected: _selectedThumb,
+                            onSelect: (index) =>
+                                setState(() => _selectedThumb = index),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Seletor Avatar/Upload (Frame 2147224313, x=102, y=513, 186×60)
+                    Positioned(
+                      left: transform.mapX(102),
+                      top: transform.mapY(513),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: Container(
+                          width: 186,
+                          height: 60,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1A1A1A),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: [
+                              const _ModeButton(label: 'Avatar', active: true),
+                              const SizedBox(width: 10),
+                              GestureDetector(
+                                onTap: () =>
+                                    setState(() => _showAllAvatars = true),
+                                child: const _ModeButton(
+                                  label: 'Ver todos',
+                                  active: false,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Botão "Next" (x=24, y=709, 342×50)
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(709),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: _NextButton(onPressed: _goToPlan),
+                      ),
+                    ),
+
+                    // Texto "Skip" (x=181, y=777, 29×22)
+                    Positioned(
+                      left: transform.mapX(181),
+                      top: transform.mapY(777),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: GestureDetector(
+                          onTap: _goToPlan,
+                          child: const Text(
+                            'Pular',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Color(0xFF9E9E9E),
+                              color: Color(0xFF525252),
                               fontSize: 14,
-                              fontFamily: 'Inter',
+                              fontFamily: 'Netflix Sans',
                               fontWeight: FontWeight.w500,
                               height: 1.5714, // 22/14
                               letterSpacing: 0,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Imagem principal (x=120, y=260, 150×220, raio 21.645)
-                Positioned(
-                  left: transform.mapX(120),
-                  top: transform.mapY(260),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: Container(
-                      width: 150,
-                      height: 220,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(21.645),
-                        border: Border.all(
-                          color: const Color(0xFF262626),
-                          width: 1.557,
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(21.645),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            AuthenticatedAvatarImage(
-                              avatarIndex: _selectedThumb,
-                              fit: BoxFit.cover,
-                            ),
-                            // Overlay #0d0d0d 20%
-                            const ColoredBox(color: Color(0x330D0D0D)),
-                          ],
                         ),
                       ),
                     ),
-                  ),
-                ),
-
-                // Miniaturas (Group 2085663462, x=24.427, y=601, 382.138×93)
-                // A miniatura selecionada (1ª) é maior: 73.146×93 com opacity 1.
-                // As demais: 64.783×82.366 com opacity 0.5.
-                // Gaps: 11.427, 13.0, 12.912, 12.522.
-                // Carousel finito: rola até o último avatar (mostrado completo
-                // graças ao padding final) e para, no estilo clássico, sem
-                // voltar ao primeiro item.
-                Positioned(
-                  left: transform.mapX(24.427),
-                  top: transform.mapY(601),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: SizedBox(
-                      width: 382.138,
-                      height: 93,
-                      child: _AvatarCarousel(
-                        avatarIndexes: _thumbImages,
-                        gaps: _thumbGaps,
-                        selected: _selectedThumb,
-                        onSelect: (index) =>
-                            setState(() => _selectedThumb = index),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Seletor Avatar/Upload (Frame 2147224313, x=102, y=513, 186×60)
-                Positioned(
-                  left: transform.mapX(102),
-                  top: transform.mapY(513),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: Container(
-                      width: 186,
-                      height: 60,
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A1A1A),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: [
-                          const _ModeButton(label: 'Avatar', active: true),
-                          const SizedBox(width: 10),
-                          GestureDetector(
-                            onTap: () =>
-                                setState(() => _showAllAvatars = true),
-                            child: const _ModeButton(
-                              label: 'Ver todos',
-                              active: false,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Botão "Next" (x=24, y=709, 342×50)
-                Positioned(
-                  left: transform.mapX(24),
-                  top: transform.mapY(709),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: _NextButton(onPressed: _goToPlan),
-                  ),
-                ),
-
-                // Texto "Skip" (x=181, y=777, 29×22)
-                Positioned(
-                  left: transform.mapX(181),
-                  top: transform.mapY(777),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: GestureDetector(
-                      onTap: _goToPlan,
-                      child: const Text(
-                        'Pular',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF525252),
-                          fontSize: 14,
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w500,
-                          height: 1.5714, // 22/14
-                          letterSpacing: 0,
+                    if (_showAllAvatars)
+                      Positioned.fill(
+                        child: _AllAvatarsModal(
+                          selectedAvatar: _selectedThumb,
+                          onClose: () =>
+                              setState(() => _showAllAvatars = false),
+                          onSelect: (index) {
+                            setState(() {
+                              _selectedThumb = index;
+                              _showAllAvatars = false;
+                            });
+                          },
                         ),
                       ),
-                    ),
-                  ),
+                  ],
                 ),
-                if (_showAllAvatars)
-                  Positioned.fill(
-                    child: _AllAvatarsModal(
-                      selectedAvatar: _selectedThumb,
-                      onClose: () => setState(() => _showAllAvatars = false),
-                      onSelect: (index) {
-                        setState(() {
-                          _selectedThumb = index;
-                          _showAllAvatars = false;
-                        });
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
+              );
+            },
           ),
         ),
       ),
@@ -381,7 +383,7 @@ class _Thumb extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           child: Opacity(
             opacity: selected ? 1.0 : 0.5,
-            child: AuthenticatedAvatarImage(
+            child: LocalAvatarImage(
               avatarIndex: avatarIndex,
               fit: BoxFit.cover,
             ),
@@ -490,7 +492,7 @@ class _ModeButton extends StatelessWidget {
           style: TextStyle(
             color: active ? Colors.white : const Color(0xFF9E9E9E),
             fontSize: 14,
-            fontFamily: 'Inter',
+            fontFamily: 'Netflix Sans',
             fontWeight: FontWeight.w500,
             height: 1.5714, // 22/14
             letterSpacing: 0,
@@ -545,7 +547,7 @@ class _AllAvatarsModal extends StatelessWidget {
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
-                            fontFamily: 'Inter',
+                            fontFamily: 'Netflix Sans',
                             fontWeight: FontWeight.w600,
                             height: 1.3,
                           ),
@@ -590,7 +592,7 @@ class _AllAvatarsModal extends StatelessWidget {
                             padding: EdgeInsets.all(isSelected ? 2 : 0),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(10),
-                              child: AuthenticatedAvatarImage(
+                              child: LocalAvatarImage(
                                 avatarIndex: index,
                                 width: 64,
                                 height: 64,
@@ -650,7 +652,7 @@ class _NextButton extends StatelessWidget {
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.5714, // 22/14
                 letterSpacing: 0,

@@ -4,11 +4,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
-import '../services/avatar_catalog.dart';
+import '../services/avatar_state.dart';
 import '../services/auth_models.dart';
 import '../services/auth_service.dart';
 import '../widgets/authenticated_avatar_image.dart';
 import '../widgets/home_bottom_nav.dart';
+import 'admin_access.dart';
 import 'home.dart';
 import 'mylist.dart';
 import 'screen_transitions.dart';
@@ -30,6 +31,7 @@ class ProfileScreenData {
     required this.genres,
     this.createdAt,
     this.recommendationsUpdatedAt,
+    this.avatarUrl,
   });
 
   factory ProfileScreenData.fromAuthUser(AuthUser user) {
@@ -39,6 +41,7 @@ class ProfileScreenData {
       email: user.email,
       role: user.role,
       avatarIndex: user.preferences?.avatarIndex ?? 0,
+      avatarUrl: user.avatarUrl,
       genres: user.preferences?.genres ?? const [],
       createdAt: user.createdAt,
       recommendationsUpdatedAt: user.preferences?.recommendationsUpdatedAt,
@@ -54,6 +57,7 @@ class ProfileScreenData {
     List<String>? genres,
     String? createdAt,
     String? recommendationsUpdatedAt,
+    String? avatarUrl,
   }) {
     return ProfileScreenData(
       id: id ?? this.id,
@@ -65,6 +69,7 @@ class ProfileScreenData {
       createdAt: createdAt ?? this.createdAt,
       recommendationsUpdatedAt:
           recommendationsUpdatedAt ?? this.recommendationsUpdatedAt,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
     );
   }
 
@@ -76,6 +81,7 @@ class ProfileScreenData {
   final List<String> genres;
   final String? createdAt;
   final String? recommendationsUpdatedAt;
+  final String? avatarUrl;
 }
 
 class ProfileScreen extends StatefulWidget {
@@ -110,17 +116,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _profile = widget.initialProfile;
     _isLoading = widget.initialProfile == null;
 
+    AvatarState.instance.addListener(_onAvatarChanged);
     if (widget.initialProfile == null) {
       _loadProfile();
+    } else {
+      AvatarState.instance.update(
+        avatarIndex: widget.initialProfile!.avatarIndex,
+        avatarUrl: widget.initialProfile!.avatarUrl,
+      );
     }
   }
 
   @override
   void dispose() {
+    AvatarState.instance.removeListener(_onAvatarChanged);
     if (_ownsAuthService) {
       _authService.close();
     }
     super.dispose();
+  }
+
+  void _onAvatarChanged() {
+    final profile = _profile;
+    final avatarIndex = AvatarState.instance.avatarIndex;
+    if (!mounted || profile == null || avatarIndex == null) return;
+    if (profile.avatarIndex == avatarIndex &&
+        profile.avatarUrl == AvatarState.instance.avatarUrl) {
+      return;
+    }
+    setState(() {
+      _profile = profile.copyWith(
+        avatarIndex: avatarIndex,
+        avatarUrl: AvatarState.instance.avatarUrl,
+      );
+    });
   }
 
   Future<void> _loadProfile({bool refresh = false}) async {
@@ -141,6 +170,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isRefreshing = false;
         _errorMessage = null;
       });
+      AvatarState.instance.update(
+        avatarIndex: user.preferences?.avatarIndex ?? 0,
+        avatarUrl: user.avatarUrl,
+      );
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -153,106 +186,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _isLoading = false;
         _isRefreshing = false;
-        _errorMessage =
-            'N\u00e3o foi poss\u00edvel carregar seu perfil agora.';
+        _errorMessage = 'N\u00e3o foi poss\u00edvel carregar seu perfil agora.';
       });
     }
   }
 
-  Future<void> _openEditProfileDrawer(BuildContext context) {
+  void _openSettings(BuildContext context) {
     final profile = _profile;
-    if (profile == null) {
-      return Future<void>.value();
-    }
-
-    return showModalBottomSheet<void>(
-      context: context,
-      enableDrag: true,
-      isScrollControlled: true,
-      useSafeArea: false,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
-      builder: (context) => _EditProfileDrawer(
-        profile: profile,
-        onSave: _saveProfileEdits,
-        useRemoteAvatars: widget.useRemoteAvatars,
+    Navigator.of(context).push(
+      cinematicPageRoute(
+        SettingScreen(
+          initialProfile: profile == null
+              ? null
+              : AuthUser(
+                  id: profile.id,
+                  email: profile.email,
+                  name: profile.name,
+                  role: profile.role,
+                  avatarUrl: profile.avatarUrl,
+                  createdAt: profile.createdAt,
+                  preferences: UserPreferences(
+                    avatarIndex: profile.avatarIndex,
+                    genres: profile.genres,
+                    recommendationsUpdatedAt: profile.recommendationsUpdatedAt,
+                  ),
+                ),
+          useRemoteAvatars: widget.useRemoteAvatars,
+        ),
       ),
     );
   }
 
-  Future<void> _saveProfileEdits(String name, int avatarIndex) async {
-    final currentProfile = _profile;
-    if (currentProfile == null) {
-      throw const ApiException('Perfil indispon\u00edvel no momento.');
-    }
-
-    final trimmedName = name.trim();
-    if (trimmedName.isEmpty) {
-      throw const ApiException('Digite um nome v\u00e1lido.');
-    }
-
-    final avatarChangedWithoutGenres =
-        avatarIndex != currentProfile.avatarIndex &&
-        currentProfile.genres.length < 3;
-
-    final updatedUser = await _authService.updateProfile(
-      userId: currentProfile.id == 0 ? null : currentProfile.id,
-      name: trimmedName,
-    );
-
-    if (avatarIndex != currentProfile.avatarIndex &&
-        currentProfile.id != 0 &&
-        currentProfile.genres.length >= 3) {
-      await _authService.savePreferences(
-        userId: currentProfile.id,
-        avatarIndex: avatarIndex,
-        genres: currentProfile.genres,
-      );
-    }
-
-    if (!mounted) return;
-
-    final nextProfile = ProfileScreenData.fromAuthUser(updatedUser).copyWith(
-      avatarIndex: avatarIndex,
-      genres: updatedUser.preferences?.genres ?? currentProfile.genres,
-      createdAt: updatedUser.createdAt ?? currentProfile.createdAt,
-      recommendationsUpdatedAt:
-          updatedUser.preferences?.recommendationsUpdatedAt ??
-          currentProfile.recommendationsUpdatedAt,
-    );
-
-    setState(() => _profile = nextProfile);
-
-    final messenger = ScaffoldMessenger.of(context);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            avatarChangedWithoutGenres
-                ? 'Nome salvo. Para persistir avatar, defina 3 g\u00eaneros em Configura\u00e7\u00f5es.'
-                : 'Perfil atualizado com sucesso.',
-          ),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-  }
-
-  void _openSettings(BuildContext context) {
-    Navigator.of(context).push(cinematicPageRoute(const SettingScreen()));
-  }
-
   void _openAdminAccess(BuildContext context) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Acessos administrativos ainda n\u00e3o est\u00e3o dispon\u00edveis no app Flutter.',
-          ),
-          behavior: SnackBarBehavior.floating,
+    final profile = _profile;
+    if (profile == null || profile.role.toLowerCase() != 'admin') {
+      return;
+    }
+
+    Navigator.of(context).push(
+      cinematicPageRoute(
+        AdminAccessScreen(
+          requesterId: profile.id,
+          useRemoteAvatars: widget.useRemoteAvatars,
         ),
-      );
+      ),
+    );
   }
 
   @override
@@ -305,10 +283,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ProfileHeader(
-                      onSettingsTap: () => _openSettings(context),
-                      isRefreshing: _isRefreshing,
-                    ),
+                    _ProfileHeader(isRefreshing: _isRefreshing),
                     const SizedBox(height: 40),
                     _ProfileSummaryCard(
                       profile: profile,
@@ -316,69 +291,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       errorMessage: _errorMessage,
                       onRetry: () => _loadProfile(refresh: true),
                       onEditTap: hasProfile
-                          ? () => _openEditProfileDrawer(context)
+                          ? () => _openSettings(context)
                           : null,
                       onAdminTap: () => _openAdminAccess(context),
                       useRemoteAvatars: widget.useRemoteAvatars,
                     ),
+                    /*
                     if (hasProfile) ...[
                       const SizedBox(height: 40),
                       const _ProfileSection(title: 'Information'),
-                      _SettingsCard(
-                        children: [
-                          _SettingsRow(
-                            label: 'Email address',
-                            value: profile.email,
-                          ),
-                          _SettingsRow(
-                            label: 'Member since',
-                            value: _formatMemberSince(profile.createdAt),
-                          ),
-                          _SettingsRow(
-                            label: 'Account type',
-                            value: _formatRole(profile.role),
-                            showDivider: false,
-                          ),
-                        ],
-                      ),
+                      _SettingsCard(...),
                       const SizedBox(height: 40),
                       const _ProfileSection(title: 'Preferences'),
-                      _SettingsCard(
-                        children: [
-                          _SettingsRow(
-                            label: 'Favorite genres',
-                            value: profile.genres.isEmpty
-                                ? 'Not configured'
-                                : profile.genres.join(', '),
-                          ),
-                          _SettingsRow(
-                            label: 'Avatar profile',
-                            value: 'Avatar #${profile.avatarIndex + 1}',
-                            action: 'Edit profile',
-                            showDivider: false,
-                          ),
-                        ],
-                      ),
-                    ],
+                      _SettingsCard(...),
+                    */
                     const SizedBox(height: 40),
-                    const _ProfileSection(title: 'Support'),
+                    const _ProfileSection(title: 'Suporte'),
                     const _SettingsCard(
                       compact: true,
                       children: [
-                        _SupportRow(label: 'Support center'),
+                        _SupportRow(label: 'Central de ajuda'),
                         _SupportRow(
-                          label: 'Privacy & Policy',
+                          label: 'Privacidade e política',
                           showDivider: false,
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'Phone number and password were intentionally removed from this screen because the web profile/settings APIs do not expose those fields.',
+                      'Telefone e senha foram removidos intencionalmente desta tela porque as APIs web de perfil/configurações não expõem esses campos.',
                       style: TextStyle(
                         color: _muted,
                         fontSize: 11,
-                        fontFamily: 'Inter',
+                        fontFamily: 'Netflix Sans',
                         fontWeight: FontWeight.w400,
                         height: 1.45,
                       ),
@@ -395,12 +340,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({
-    required this.onSettingsTap,
-    required this.isRefreshing,
-  });
+  const _ProfileHeader({required this.isRefreshing});
 
-  final VoidCallback onSettingsTap;
   final bool isRefreshing;
 
   @override
@@ -410,12 +351,12 @@ class _ProfileHeader extends StatelessWidget {
       children: [
         const Expanded(
           child: Text(
-            'Profile',
+            'Perfil',
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: Colors.white,
               fontSize: 24,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w600,
               height: 1.42,
             ),
@@ -433,30 +374,13 @@ class _ProfileHeader extends StatelessWidget {
               ),
             ),
           ),
+        /*
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onSettingsTap,
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: ShapeDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [_card, Color(0x330D0D0D)],
-              ),
-              shape: RoundedRectangleBorder(
-                side: const BorderSide(color: _border, width: 1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            child: const Icon(
-              Icons.settings_outlined,
-              color: Color(0xFFBDBDBD),
-              size: 22,
-            ),
-          ),
+          child: Container(...),
         ),
+        */
       ],
     );
   }
@@ -511,6 +435,7 @@ class _ProfileSummaryCard extends StatelessWidget {
           else ...[
             _ProfileAvatar(
               avatarIndex: profile.avatarIndex,
+              avatarUrl: profile.avatarUrl,
               isAdmin: profile.role.toLowerCase() == 'admin',
               useRemoteAvatar: useRemoteAvatars,
             ),
@@ -526,7 +451,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w600,
                       height: 1.3,
                     ),
@@ -554,7 +479,7 @@ class _ProfileSummaryCard extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w400,
                 height: 1.5,
               ),
@@ -567,7 +492,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w700,
                   height: 1.4,
                 ),
@@ -590,7 +515,7 @@ class _ProfileSummaryCard extends StatelessWidget {
                     style: const TextStyle(
                       color: Color(0xFF9E9E9E),
                       fontSize: 13,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w400,
                       height: 1.4,
                     ),
@@ -647,7 +572,7 @@ class _SummaryLoadingState extends StatelessWidget {
           height: 96,
           decoration: BoxDecoration(
             color: Colors.white10,
-            shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(color: _border),
           ),
         ),
@@ -687,11 +612,7 @@ class _ProfileUnavailableState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const Icon(
-          Icons.cloud_off_rounded,
-          color: Color(0xFFBDBDBD),
-          size: 48,
-        ),
+        const Icon(Icons.cloud_off_rounded, color: Color(0xFFBDBDBD), size: 48),
         const SizedBox(height: 16),
         const Text(
           'Erro ao carregar dados',
@@ -699,7 +620,7 @@ class _ProfileUnavailableState extends StatelessWidget {
           style: TextStyle(
             color: Colors.white,
             fontSize: 18,
-            fontFamily: 'Inter',
+            fontFamily: 'Netflix Sans',
             fontWeight: FontWeight.w600,
             height: 1.3,
           ),
@@ -711,7 +632,7 @@ class _ProfileUnavailableState extends StatelessWidget {
           style: const TextStyle(
             color: Color(0xFFBDBDBD),
             fontSize: 13,
-            fontFamily: 'Inter',
+            fontFamily: 'Netflix Sans',
             fontWeight: FontWeight.w400,
             height: 1.45,
           ),
@@ -723,7 +644,7 @@ class _ProfileUnavailableState extends StatelessWidget {
           style: TextStyle(
             color: Color(0xFF9E9E9E),
             fontSize: 12,
-            fontFamily: 'Inter',
+            fontFamily: 'Netflix Sans',
             fontWeight: FontWeight.w400,
             height: 1.4,
           ),
@@ -772,7 +693,7 @@ class _InlineError extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w400,
                 height: 1.4,
               ),
@@ -789,7 +710,7 @@ class _InlineError extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text('Retry'),
+            child: const Text('Tentar novamente'),
           ),
         ],
       ),
@@ -816,7 +737,7 @@ class _TagChip extends StatelessWidget {
         style: const TextStyle(
           color: Colors.black,
           fontSize: 12,
-          fontFamily: 'Inter',
+          fontFamily: 'Netflix Sans',
           fontWeight: FontWeight.w500,
           height: 1.2,
         ),
@@ -828,11 +749,13 @@ class _TagChip extends StatelessWidget {
 class _ProfileAvatar extends StatelessWidget {
   const _ProfileAvatar({
     required this.avatarIndex,
+    this.avatarUrl,
     required this.isAdmin,
     required this.useRemoteAvatar,
   });
 
   final int avatarIndex;
+  final String? avatarUrl;
   final bool isAdmin;
   final bool useRemoteAvatar;
 
@@ -848,12 +771,14 @@ class _ProfileAvatar extends StatelessWidget {
             width: 96,
             height: 96,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(color: _border, width: 2),
             ),
-            child: ClipOval(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
               child: AuthenticatedAvatarImage(
                 avatarIndex: avatarIndex,
+                avatarUrl: avatarUrl,
                 fit: BoxFit.cover,
                 useRemoteAvatar: useRemoteAvatar,
               ),
@@ -871,11 +796,7 @@ class _ProfileAvatar extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: _card, width: 2),
                 ),
-                child: const Icon(
-                  Icons.star,
-                  size: 12,
-                  color: Colors.black,
-                ),
+                child: const Icon(Icons.star, size: 12, color: Colors.black),
               ),
             ),
         ],
@@ -905,7 +826,7 @@ class _ProfileActionButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Row(
@@ -918,651 +839,12 @@ class _ProfileActionButton extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 13,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.4,
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EditProfileDrawer extends StatelessWidget {
-  const _EditProfileDrawer({
-    required this.profile,
-    required this.onSave,
-    required this.useRemoteAvatars,
-  });
-
-  final ProfileScreenData profile;
-  final Future<void> Function(String name, int avatarIndex) onSave;
-  final bool useRemoteAvatars;
-
-  @override
-  Widget build(BuildContext context) {
-    final height = MediaQuery.sizeOf(context).height * 0.902;
-
-    return SizedBox(
-      height: height,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: 22,
-            right: 22,
-            top: -47,
-            height: 127,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                child: Container(color: const Color(0x33A259FF)),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(30),
-              ),
-              child: _EditProfileSheetBody(
-                profile: profile,
-                onSave: onSave,
-                useRemoteAvatars: useRemoteAvatars,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EditProfileSheetBody extends StatefulWidget {
-  const _EditProfileSheetBody({
-    required this.profile,
-    required this.onSave,
-    required this.useRemoteAvatars,
-  });
-
-  final ProfileScreenData profile;
-  final Future<void> Function(String name, int avatarIndex) onSave;
-  final bool useRemoteAvatars;
-
-  @override
-  State<_EditProfileSheetBody> createState() => _EditProfileSheetBodyState();
-}
-
-class _EditProfileSheetBodyState extends State<_EditProfileSheetBody> {
-  late final TextEditingController _nameController;
-  late int _selectedAvatar;
-  bool _avatarMenuOpen = false;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.profile.name);
-    _selectedAvatar = widget.profile.avatarIndex;
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleSave() async {
-    if (_isSaving) return;
-
-    setState(() => _isSaving = true);
-
-    try {
-      await widget.onSave(_nameController.text, _selectedAvatar);
-      if (!mounted) return;
-      Navigator.of(context).maybePop();
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(error.message),
-            backgroundColor: const Color(0xFFAD2536),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(
-            content: Text(
-              'N\u00e3o foi poss\u00edvel salvar seu perfil agora.',
-            ),
-            backgroundColor: Color(0xFFAD2536),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final viewInsets = MediaQuery.viewInsetsOf(context);
-
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        decoration: ShapeDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [_card, _bg],
-          ),
-          shape: RoundedRectangleBorder(
-            side: const BorderSide(color: Color(0xFF2C2C2C), width: 1.4),
-            borderRadius: BorderRadius.circular(30),
-          ),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Stack(
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(24, 21, 24, 24 + viewInsets.bottom),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final compact = constraints.maxHeight < 690;
-                    final topGap = compact ? 50.0 : 96.0;
-                    final fieldGap = compact ? 28.0 : 52.0;
-
-                    return SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight,
-                        ),
-                        child: IntrinsicHeight(
-                          child: Column(
-                            children: [
-                              SizedBox(
-                                height: 32,
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    const Text(
-                                      'Edit profile',
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontFamily: 'Inter',
-                                        fontWeight: FontWeight.w500,
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                    Align(
-                                      alignment: Alignment.centerRight,
-                                      child: GestureDetector(
-                                        behavior: HitTestBehavior.opaque,
-                                        onTap: () =>
-                                            Navigator.of(context).maybePop(),
-                                        child: const SizedBox(
-                                          width: 40,
-                                          height: 40,
-                                          child: Icon(
-                                            Icons.close_rounded,
-                                            color: Color(0xFF525252),
-                                            size: 26,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(height: topGap),
-                              _EditProfileAvatars(
-                                selectedAvatar: _selectedAvatar,
-                                useRemoteAvatars: widget.useRemoteAvatars,
-                                onCurrentAvatarTap: () {
-                                  setState(() => _avatarMenuOpen = true);
-                                },
-                              ),
-                              SizedBox(height: fieldGap),
-                              _EditNameField(controller: _nameController),
-                              const Spacer(),
-                              const SizedBox(height: 24),
-                              _EditProfileActions(
-                                isSaving: _isSaving,
-                                onSave: _handleSave,
-                                onCancel: () =>
-                                    Navigator.of(context).maybePop(),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              if (_avatarMenuOpen)
-                Positioned.fill(
-                  child: _EditAvatarOverlay(
-                    selectedAvatar: _selectedAvatar,
-                    useRemoteAvatars: widget.useRemoteAvatars,
-                    onSelect: (avatarIndex) {
-                      setState(() {
-                        _selectedAvatar = avatarIndex;
-                        _avatarMenuOpen = false;
-                      });
-                    },
-                    onClose: () => setState(() => _avatarMenuOpen = false),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EditProfileAvatars extends StatelessWidget {
-  const _EditProfileAvatars({
-    required this.selectedAvatar,
-    required this.useRemoteAvatars,
-    required this.onCurrentAvatarTap,
-  });
-
-  final int selectedAvatar;
-  final bool useRemoteAvatars;
-  final VoidCallback onCurrentAvatarTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final secondaryAvatar = (selectedAvatar + 1) % totalRemoteAvatars;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onCurrentAvatarTap,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              ClipOval(
-                child: AuthenticatedAvatarImage(
-                  avatarIndex: selectedAvatar,
-                  width: 80,
-                  height: 80,
-                  fit: BoxFit.cover,
-                  useRemoteAvatar: useRemoteAvatars,
-                ),
-              ),
-              Container(
-                width: 80,
-                height: 80,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0x330D0D0D),
-                ),
-              ),
-              const Icon(
-                Icons.photo_camera_outlined,
-                color: Colors.white,
-                size: 30,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 26),
-        ClipOval(
-          child: AuthenticatedAvatarImage(
-            avatarIndex: secondaryAvatar,
-            width: 80,
-            height: 80,
-            fit: BoxFit.cover,
-            useRemoteAvatar: useRemoteAvatars,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EditAvatarOverlay extends StatelessWidget {
-  const _EditAvatarOverlay({
-    required this.selectedAvatar,
-    required this.useRemoteAvatars,
-    required this.onSelect,
-    required this.onClose,
-  });
-
-  final int selectedAvatar;
-  final bool useRemoteAvatars;
-  final ValueChanged<int> onSelect;
-  final VoidCallback onClose;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0x660D0D0D),
-      child: Center(
-        child: Container(
-          key: const ValueKey('edit_avatar_menu'),
-          width: 280,
-          height: 384,
-          padding: const EdgeInsets.fromLTRB(24, 26, 24, 26),
-          decoration: ShapeDecoration(
-            color: _card,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-          ),
-          child: Column(
-            children: [
-              const Text(
-                'Edit avatar',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w500,
-                  height: 1.57,
-                ),
-              ),
-              const SizedBox(height: 20),
-              const _AvatarCategoryTabs(),
-              const SizedBox(height: 20),
-              Expanded(
-                child: GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.zero,
-                  itemCount: totalRemoteAvatars,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    mainAxisExtent: 50,
-                  ),
-                  itemBuilder: (context, index) {
-                    final active = index == selectedAvatar;
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => onSelect(index),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          border: active
-                              ? Border.all(color: Colors.white, width: 2)
-                              : null,
-                        ),
-                        padding: EdgeInsets.all(active ? 2 : 0),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: AuthenticatedAvatarImage(
-                            avatarIndex: index,
-                            width: 50,
-                            height: 50,
-                            fit: BoxFit.cover,
-                            useRemoteAvatar: useRemoteAvatars,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: _DrawerButton(
-                      label: 'Save',
-                      primary: true,
-                      onTap: onClose,
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: _DrawerButton(label: 'Cancel', onTap: onClose),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AvatarCategoryTabs extends StatelessWidget {
-  const _AvatarCategoryTabs();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 176,
-      height: 40,
-      padding: const EdgeInsets.all(5),
-      decoration: ShapeDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [_card, Color(0x330D0D0D)],
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-      child: const Row(
-        children: [
-          _AvatarTab(label: 'Anime', active: true),
-          _AvatarTab(label: 'Emoji'),
-          _AvatarTab(label: 'Other'),
-        ],
-      ),
-    );
-  }
-}
-
-class _AvatarTab extends StatelessWidget {
-  const _AvatarTab({required this.label, this.active = false});
-
-  final String label;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        height: 30,
-        decoration: active
-            ? ShapeDecoration(
-                color: _border,
-                shape: RoundedRectangleBorder(
-                  side: const BorderSide(color: Color(0xFF2C2C2C), width: 1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-              )
-            : null,
-        alignment: Alignment.center,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: active ? Colors.white : const Color(0xFF9E9E9E),
-              fontSize: 10,
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w400,
-              height: 1.6,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EditNameField extends StatelessWidget {
-  const _EditNameField({required this.controller});
-
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 300,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'Your name',
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Color(0xFF9E9E9E),
-              fontSize: 14,
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w500,
-              height: 1.57,
-            ),
-          ),
-          const SizedBox(height: 15),
-          Container(
-            height: 70,
-            padding: const EdgeInsets.symmetric(horizontal: 15),
-            decoration: ShapeDecoration(
-              shape: RoundedRectangleBorder(
-                side: const BorderSide(color: _border, width: 1.5),
-                borderRadius: BorderRadius.circular(20),
-              ),
-            ),
-            alignment: Alignment.center,
-            child: TextField(
-              controller: controller,
-              autofocus: false,
-              cursorColor: Colors.white,
-              textAlign: TextAlign.center,
-              textInputAction: TextInputAction.done,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                height: 1.25,
-              ),
-              decoration: const InputDecoration(
-                isCollapsed: true,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EditProfileActions extends StatelessWidget {
-  const _EditProfileActions({
-    required this.onSave,
-    required this.onCancel,
-    required this.isSaving,
-  });
-
-  final VoidCallback onSave;
-  final VoidCallback onCancel;
-  final bool isSaving;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _DrawerButton(
-            label: isSaving ? 'Saving...' : 'Save',
-            primary: true,
-            onTap: onSave,
-          ),
-        ),
-        const SizedBox(width: 20),
-        Expanded(
-          child: _DrawerButton(label: 'Cancel', onTap: onCancel),
-        ),
-      ],
-    );
-  }
-}
-
-class _DrawerButton extends StatelessWidget {
-  const _DrawerButton({
-    required this.label,
-    required this.onTap,
-    this.primary = false,
-  });
-
-  final String label;
-  final VoidCallback onTap;
-  final bool primary;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        height: 50,
-        decoration: ShapeDecoration(
-          gradient: primary
-              ? const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFA259FF), Color(0xFF562199)],
-                )
-              : null,
-          shadows: primary
-              ? const [
-                  BoxShadow(
-                    color: Color(0x33A259FF),
-                    blurRadius: 10,
-                    offset: Offset(0, 10),
-                  ),
-                ]
-              : null,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(
-              color: primary
-                  ? const Color(0xFFC49EFF)
-                  : const Color(0xFF2C2C2C),
-              width: 1,
-            ),
-            borderRadius: BorderRadius.circular(40),
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: primary ? Colors.white : const Color(0xFF9E9E9E),
-            fontSize: 14,
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w500,
-            height: 1.57,
-          ),
         ),
       ),
     );
@@ -1583,7 +865,7 @@ class _ProfileSection extends StatelessWidget {
         style: const TextStyle(
           color: _muted,
           fontSize: 14,
-          fontFamily: 'Inter',
+          fontFamily: 'Netflix Sans',
           fontWeight: FontWeight.w500,
           height: 1.05,
         ),
@@ -1619,90 +901,6 @@ class _SettingsCard extends StatelessWidget {
   }
 }
 
-class _SettingsRow extends StatelessWidget {
-  const _SettingsRow({
-    required this.label,
-    required this.value,
-    this.action,
-    this.showDivider = true,
-  });
-
-  final String label;
-  final String value;
-  final String? action;
-  final bool showDivider;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 60),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: showDivider
-              ? const BorderSide(color: _border, width: 1)
-              : BorderSide.none,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: _muted,
-                fontSize: 14,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                height: 1.57,
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Flexible(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  value,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w400,
-                    height: 1.4,
-                  ),
-                ),
-                if (action != null) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    action!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: _muted,
-                      fontSize: 12,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w500,
-                      height: 1.33,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SupportRow extends StatelessWidget {
   const _SupportRow({required this.label, this.showDivider = true});
 
@@ -1730,7 +928,7 @@ class _SupportRow extends StatelessWidget {
               style: const TextStyle(
                 color: _muted,
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.57,
               ),
@@ -1758,34 +956,29 @@ String _maskEmail(String email) {
 }
 
 String _formatMemberSince(String? createdAt) {
-  if (createdAt == null || createdAt.isEmpty) return 'Member since unavailable';
+  if (createdAt == null || createdAt.isEmpty) {
+    return 'Membro desde indisponível';
+  }
 
   final parsed = DateTime.tryParse(createdAt);
-  if (parsed == null) return 'Member since unavailable';
+  if (parsed == null) return 'Membro desde indisponível';
 
   const months = <String>[
     'Jan',
-    'Feb',
+    'Fev',
     'Mar',
-    'Apr',
-    'May',
+    'Abr',
+    'Mai',
     'Jun',
     'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
+    'Ago',
+    'Set',
+    'Out',
     'Nov',
-    'Dec',
+    'Dez',
   ];
 
-  final month = months[math.max(0, math.min(parsed.month - 1, months.length - 1))];
+  final month =
+      months[math.max(0, math.min(parsed.month - 1, months.length - 1))];
   return '$month ${parsed.year}';
-}
-
-String _formatRole(String role) {
-  return switch (role.toLowerCase()) {
-    'admin' => 'Administrator',
-    'client' => 'Client',
-    _ => role,
-  };
 }
