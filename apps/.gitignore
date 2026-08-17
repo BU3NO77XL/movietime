@@ -1,0 +1,5 @@
+
+# Android release secrets and generated artifacts
+movietime_app/android/key.properties
+movietime_app/android/app/*.jks
+movietime_app/build/
