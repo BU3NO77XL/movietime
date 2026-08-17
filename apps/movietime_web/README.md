@@ -102,8 +102,6 @@ GET/POST/DELETE /api/watch-history
 GET/POST/DELETE /api/ratings
 GET/POST        /api/match
 GET             /api/content/[...path]
-GET             /api/achievements
-POST            /api/achievements/check
 ```
 
 As rotas mobile aceitam:

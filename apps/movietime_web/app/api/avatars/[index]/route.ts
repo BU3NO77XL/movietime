@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
-import { supabaseAdmin } from '@/lib/supabase-admin';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -17,11 +15,6 @@ export async function GET(
   request: NextRequest,
   context: { params: Promise<{ index: string }> },
 ) {
-  const session = await getSessionFromRequest(request);
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Nao autenticado.' }, { status: 401 });
-  }
-
   const { index } = await context.params;
   const normalized = normalizeAvatarIndex(index);
   if (!normalized) {
@@ -29,21 +22,6 @@ export async function GET(
       { error: 'Avatar invalido.' },
       { status: 400 },
     );
-  }
-
-  const objectPath = `images/${normalized}.png`;
-  const { data, error } = await supabaseAdmin.storage
-    .from('avatars')
-    .download(objectPath);
-
-  if (!error && data) {
-    return new NextResponse(data, {
-      status: 200,
-      headers: {
-        'Content-Type': data.type || 'image/png',
-        'Cache-Control': 'private, max-age=3600',
-      },
-    });
   }
 
   try {

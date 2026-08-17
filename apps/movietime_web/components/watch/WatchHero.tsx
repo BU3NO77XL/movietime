@@ -349,11 +349,7 @@ const WatchHero = memo(function WatchHero({
                                             currentRating={currentRating}
                                             onRate={(value) => {
                                                 handleRatingAction(Number(movie?.tmdb_id), movie?.type || 'movie', value);
-                                                fetch('/api/achievements/check', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ userId, action: 'rated' }),
-                                                }).catch(() => {});
+
                                                 setShowRatingTooltip(false);
                                                 const el = ratingBtnRef.current;
                                                 if (el) {

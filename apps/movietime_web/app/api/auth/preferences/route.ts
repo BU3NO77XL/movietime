@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { NETFLIX_AVATARS } from '@/lib/avatars';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { getProfileIdFromRequest } from '@/lib/session';
 
@@ -35,7 +34,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const avatarUrl = NETFLIX_AVATARS[Number(avatarIndex)] || null;
+  const avatarNumber = Number(avatarIndex) + 1;
+  const avatarUrl = Number.isInteger(avatarNumber) && avatarNumber >= 1 && avatarNumber <= 255
+    ? new URL('/api/avatars/' + avatarNumber, request.url).toString()
+    : null;
 
   const { data: preferences } = await supabaseAdmin
     .from('preferences')

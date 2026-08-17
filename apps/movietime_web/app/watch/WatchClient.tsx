@@ -136,7 +136,7 @@ function WatchContent() {
 
     // Hook de navegação otimizada (recebe setLocalOverride para fast-path)
     const { navigateToWatch } = useWatchNavigation(setLocalOverride);
-    
+
     const { getLogosForMovie } = useLogoStore();
 
     // Valores ativos (override local tem prioridade sobre URL)
@@ -158,7 +158,7 @@ function WatchContent() {
         const cached = queryClient.getQueryData(['movie', 'tmdb', tmdbId, mediaType]);
         void cached; // suprime unused warning
     }
-    
+
     // Estado para controlar se o componente foi montado no cliente (evita erro de hidratação)
     const [isMounted, setIsMounted] = useState(false);
 
@@ -661,7 +661,7 @@ function WatchContent() {
     useEffect(() => {
         // Garantir que só roda no cliente
         if (!isMounted) return;
-        
+
         // Se já temos logos pré-carregados do store, usar eles
         if (movie?.tmdb_id) {
             const preloaded = getLogosForMovie(movie.tmdb_id);
@@ -911,11 +911,7 @@ function WatchContent() {
                         progressPercent: 0,
                     }),
                 });
-                fetch('/api/achievements/check', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId, action: 'watched' }),
-                }).catch(() => {});
+
             } catch (e) { /* silent */ }
         }
         const embedUrl = isSeries
@@ -1125,5 +1121,3 @@ function WatchContent() {
         </div >
     );
 }
-
-
