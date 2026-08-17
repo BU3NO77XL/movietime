@@ -42,6 +42,8 @@ dependencies:
   http: ^1.6.0
   flutter_secure_storage: ^10.0.0
   url_launcher: ^6.3.2
+  webview_flutter: ^4.13.0
+  webview_flutter_android: ^4.13.0
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +70,7 @@ flutter:
     - assets/fonts/
     - assets/icons/
     - assets/images/
+    - assets/avatars/images/
     - assets/home/
     - assets/home/images/
     - assets/home/vectors/
@@ -82,6 +85,7 @@ flutter:
 
   shaders:
     - assets/shaders/motion_blur.frag
+    - assets/shaders/rotational_motion_blur.frag
 
   fonts:
     - family: Poppins
@@ -102,6 +106,16 @@ flutter:
           weight: 500
         - asset: assets/fonts/Inter-SemiBold.otf
           weight: 600
+    - family: Netflix Sans
+      fonts:
+        - asset: assets/fonts/Netflix_Sans/NetflixSans-Light.otf
+          weight: 300
+        - asset: assets/fonts/Netflix_Sans/NetflixSans-Regular.otf
+          weight: 400
+        - asset: assets/fonts/Netflix_Sans/NetflixSans-Medium.otf
+          weight: 500
+        - asset: assets/fonts/Netflix_Sans/NetflixSans-Bold.otf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:
