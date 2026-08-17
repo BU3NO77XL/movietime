@@ -63,200 +63,204 @@ class _SignUpState extends State<SignUp> {
     // escalonamento de acessibilidade seja aplicado antes do transform, os
     // textos deixam de caber nos containers do frame e provocam overflow.
     return MediaQuery(
-      data: MediaQuery.of(context).copyWith(
-        textScaler: TextScaler.noScaling,
-      ),
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
       child: Scaffold(
         backgroundColor: const Color(0xFF0D0D0D),
         body: SafeArea(
           child: LayoutBuilder(
-          builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, constraints.maxHeight);
-          final transform = DesignTransform.fromSize(size);
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, constraints.maxHeight);
+              final transform = DesignTransform.fromSize(size);
 
-          return SizedBox(
-            width: size.width,
-            height: size.height,
-            child: Stack(
-              fit: StackFit.expand,
-              clipBehavior: Clip.none,
-              children: [
-                // Fundo preto base
-                const ColoredBox(color: Color(0xFF0D0D0D)),
+              return SizedBox(
+                width: size.width,
+                height: size.height,
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Fundo preto base
+                    const ColoredBox(color: Color(0xFF0D0D0D)),
 
-                // Glow roxo (Ellipse 1500, x=-145, y=-155, blur 300, roxo 20%)
-                Positioned(
-                  left: transform.mapX(-145),
-                  top: transform.mapY(-155),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                      child: Container(
-                        width: 350,
-                        height: 350,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0x33A259FF), // #a259ff 20%
+                    // Glow roxo (Ellipse 1500, x=-145, y=-155, blur 300, roxo 20%)
+                    Positioned(
+                      left: transform.mapX(-145),
+                      top: transform.mapY(-155),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 300,
+                            sigmaY: 300,
+                          ),
+                          child: Container(
+                            width: 350,
+                            height: 350,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0x33A259FF), // #a259ff 20%
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Glow ciano (Ellipse 1501, x=138, y=580, blur 300, ciano 10%)
-                Positioned(
-                  left: transform.mapX(138),
-                  top: transform.mapY(580),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                      child: Container(
-                        width: 350,
-                        height: 350,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0x1A5CE1E6), // #5ce1e6 10%
+                    // Glow ciano (Ellipse 1501, x=138, y=580, blur 300, ciano 10%)
+                    Positioned(
+                      left: transform.mapX(138),
+                      top: transform.mapY(580),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 300,
+                            sigmaY: 300,
+                          ),
+                          child: Container(
+                            width: 350,
+                            height: 350,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0x1A5CE1E6), // #5ce1e6 10%
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Título central (x=95, y=171.47, 200×61)
-                Positioned(
-                  left: transform.mapX(95),
-                  top: transform.mapY(171.465),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: const SizedBox(
-                      width: 200,
-                      height: 61,
-                      child: Column(
-                        children: [
-                          Text(
-                            'Cadastre-se',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w600,
-                              height: 1.4167, // 34/24
-                              letterSpacing: 0,
-                            ),
-                          ),
-                          SizedBox(height: 5),
-                          Text(
-                            'Crie sua conta em segundos',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Color(0xFF9E9E9E),
-                              fontSize: 14,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w400,
-                              height: 1.5714, // 22/14
-                              letterSpacing: 0,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Botões sociais (x=24, y=317, 342×210)
-                Positioned(
-                  left: transform.mapX(24),
-                  top: transform.mapY(317),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: SizedBox(
-                      width: 342,
-                      height: 210,
-                      child: Column(
-                        children: [
-                          const SocialButton(
-                            label: 'Cadastre-se com a Apple',
-                            icon: AppleIcon(),
-                          ),
-                          const SizedBox(height: 15),
-                          const SocialButton(
-                            label: 'Cadastre-se com o Google',
-                            icon: GoogleIcon(),
-                          ),
-                          const SizedBox(height: 15),
-                          _EmailButton(
-                            label: 'Continuar com e-mail',
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const SignUpEmail(),
+                    // Título central (x=95, y=171.47, 200×61)
+                    Positioned(
+                      left: transform.mapX(95),
+                      top: transform.mapY(171.465),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: const SizedBox(
+                          width: 200,
+                          height: 61,
+                          child: Column(
+                            children: [
+                              Text(
+                                'Cadastre-se',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontFamily: 'Netflix Sans',
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.4167, // 34/24
+                                  letterSpacing: 0,
                                 ),
-                              );
-                            },
+                              ),
+                              SizedBox(height: 5),
+                              Text(
+                                'Crie sua conta em segundos',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFF9E9E9E),
+                                  fontSize: 14,
+                                  fontFamily: 'Netflix Sans',
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.5714, // 22/14
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // "Already have an account? Sign In" (y=774)
-                // Centralizado horizontalmente: usa a largura útil da tela
-                // (342px, de x=24 a x=366) com textAlign: TextAlign.center,
-                // garantindo que o texto fique perfeitamente centralizado
-                // independentemente da largura real renderizada.
-                Positioned(
-                  left: transform.mapX(24),
-                  top: transform.mapY(774),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: SizedBox(
-                      width: 342,
-                      child: Text.rich(
-                        textAlign: TextAlign.center,
-                        TextSpan(
-                          children: [
-                            const TextSpan(
-                              text: 'Já tem uma conta? ',
-                              style: TextStyle(
-                                color: Color(0xFF525252),
-                                fontSize: 14,
-                                fontFamily: 'Inter',
-                                fontWeight: FontWeight.w500,
-                                height: 1.5714, // 22/14
-                                letterSpacing: 0,
-                              ),
-                            ),
-                            TextSpan(
-                              text: 'Entrar',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontFamily: 'Inter',
-                                fontWeight: FontWeight.w500,
-                                height: 1.5714, // 22/14
-                                letterSpacing: 0,
-                              ),
-                              recognizer: _goToSignIn,
-                            ),
-                          ],
                         ),
                       ),
                     ),
-                  ),
+
+                    // Botões sociais (x=24, y=317, 342×210)
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(317),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: 342,
+                          height: 210,
+                          child: Column(
+                            children: [
+                              const SocialButton(
+                                label: 'Cadastre-se com a Apple',
+                                icon: AppleIcon(),
+                              ),
+                              const SizedBox(height: 15),
+                              const SocialButton(
+                                label: 'Cadastre-se com o Google',
+                                icon: GoogleIcon(),
+                              ),
+                              const SizedBox(height: 15),
+                              _EmailButton(
+                                label: 'Continuar com e-mail',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const SignUpEmail(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // "Already have an account? Sign In" (y=774)
+                    // Centralizado horizontalmente: usa a largura útil da tela
+                    // (342px, de x=24 a x=366) com textAlign: TextAlign.center,
+                    // garantindo que o texto fique perfeitamente centralizado
+                    // independentemente da largura real renderizada.
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(774),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: 342,
+                          child: Text.rich(
+                            textAlign: TextAlign.center,
+                            TextSpan(
+                              children: [
+                                const TextSpan(
+                                  text: 'Já tem uma conta? ',
+                                  style: TextStyle(
+                                    color: Color(0xFF525252),
+                                    fontSize: 14,
+                                    fontFamily: 'Netflix Sans',
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.5714, // 22/14
+                                    letterSpacing: 0,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: 'Entrar',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontFamily: 'Netflix Sans',
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.5714, // 22/14
+                                    letterSpacing: 0,
+                                  ),
+                                  recognizer: _goToSignIn,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
+              );
+            },
           ),
         ),
       ),
@@ -295,7 +299,7 @@ class SocialButton extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.5714, // 22/14
                 letterSpacing: 0,
@@ -338,7 +342,7 @@ class _EmailButton extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w500,
                   height: 1.5714, // 22/14
                   letterSpacing: 0,

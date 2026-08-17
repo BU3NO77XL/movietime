@@ -19,7 +19,7 @@ class MovieTimeApp extends StatelessWidget {
           seedColor: const Color(0xFF5CE1E6),
           brightness: Brightness.dark,
         ),
-        fontFamily: 'Poppins',
+        fontFamily: 'Netflix Sans',
       ),
       home: const Intro(),
     );

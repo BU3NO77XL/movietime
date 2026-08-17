@@ -145,7 +145,7 @@ class _HighlightsState extends State<Highlights> {
                                   style: TextStyle(
                                     color: Color(0xFF9E9E9E),
                                     fontSize: 12,
-                                    fontFamily: 'Inter',
+                                    fontFamily: 'Netflix Sans',
                                     fontWeight: FontWeight.w500,
                                     height: 1.3333, // 16/12
                                     letterSpacing: 0,
@@ -174,7 +174,7 @@ class _HighlightsState extends State<Highlights> {
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 24,
-                              fontFamily: 'Inter',
+                              fontFamily: 'Netflix Sans',
                               fontWeight: FontWeight.w600,
                               height: 1.4167, // 34/24
                               letterSpacing: 0,
@@ -200,7 +200,7 @@ class _HighlightsState extends State<Highlights> {
                             style: TextStyle(
                               color: Color(0xFF9E9E9E),
                               fontSize: 14,
-                              fontFamily: 'Inter',
+                              fontFamily: 'Netflix Sans',
                               fontWeight: FontWeight.w500,
                               height: 1.5714, // 22/14
                               letterSpacing: 0,
@@ -305,7 +305,7 @@ class _MovieTimeBrand extends StatelessWidget {
         style: TextStyle(
           color: Colors.white,
           fontSize: 14.88,
-          fontFamily: 'Poppins',
+          fontFamily: 'Netflix Sans',
           fontWeight: FontWeight.w500,
           height: 1.8333, // 27.29/14.88
           letterSpacing: 0,
@@ -404,7 +404,7 @@ class _MovieCard extends StatelessWidget {
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
-                              fontFamily: 'Inter',
+                              fontFamily: 'Netflix Sans',
                               fontWeight: FontWeight.w500,
                               height: 1.3333, // 16/12
                               letterSpacing: 0,
@@ -418,27 +418,24 @@ class _MovieCard extends StatelessWidget {
               ),
             ),
             // Rodapé (Frame 2085663704, 198×60)
-            SizedBox(
-              height: 60,
+            Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   // Título + ano (Frame 2085663702, 128×48)
                   Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: Column(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           title,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
-                            fontFamily: 'Inter',
+                            fontFamily: 'Netflix Sans',
                             fontWeight: FontWeight.w500,
                             height: 1.5, // 24/16
                             letterSpacing: 0,
@@ -450,14 +447,13 @@ class _MovieCard extends StatelessWidget {
                           style: const TextStyle(
                             color: Color(0xFF9E9E9E),
                             fontSize: 12,
-                            fontFamily: 'Inter',
+                            fontFamily: 'Netflix Sans',
                             fontWeight: FontWeight.w500,
                             height: 1.3333, // 16/12
                             letterSpacing: 0,
                           ),
                         ),
                       ],
-                    ),
                     ),
                   ),
                   const SizedBox(width: 1),
@@ -485,7 +481,7 @@ class _MovieCard extends StatelessWidget {
                       style: TextStyle(
                         color: Color(0xFF9E9E9E),
                         fontSize: 12,
-                        fontFamily: 'Inter',
+                        fontFamily: 'Netflix Sans',
                         fontWeight: FontWeight.w500,
                         height: 1.3333, // 16/12
                         letterSpacing: 0,

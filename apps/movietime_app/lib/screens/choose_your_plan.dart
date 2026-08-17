@@ -98,7 +98,7 @@ class _ControlPlanState extends State<ControlPlan> {
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
-                    fontFamily: 'Inter',
+                    fontFamily: 'Netflix Sans',
                     fontWeight: FontWeight.w600,
                     height: 1.4,
                     letterSpacing: 0,
@@ -111,7 +111,7 @@ class _ControlPlanState extends State<ControlPlan> {
                   style: TextStyle(
                     color: Color(0xFF9E9E9E),
                     fontSize: 13,
-                    fontFamily: 'Inter',
+                    fontFamily: 'Netflix Sans',
                     fontWeight: FontWeight.w400,
                     height: 1.5,
                     letterSpacing: 0,
@@ -173,7 +173,7 @@ class _ControlPlanState extends State<ControlPlan> {
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 14,
-                            fontFamily: 'Inter',
+                            fontFamily: 'Netflix Sans',
                             fontWeight: FontWeight.w500,
                             height: 1.5714,
                             letterSpacing: 0,
@@ -289,135 +289,133 @@ class _ControlPlanState extends State<ControlPlan> {
                     ),
 
                     // Título + subtítulo (x=65, y=123, 260×95)
-                      Positioned(
-                        left: transform.mapX(65),
-                        top: transform.mapY(123),
-                        child: Transform.scale(
-                          scale: transform.scale,
-                          alignment: Alignment.topLeft,
-                          child: const SizedBox(
-                            width: 260,
-                            height: 95,
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Escolha seu plano',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 24,
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.4167, // 34/24
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                                SizedBox(height: 5),
-                                Text(
-                                  'Sem compromissos, cancele quando quiser.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Color(0xFF9E9E9E),
-                                    fontSize: 14,
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.w500,
-                                    height: 1.5714, // 22/14
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Carousel de cards de plano (x=24, y=254, 310×456).
-                      Positioned(
-                        left: transform.mapX(24),
-                        top: transform.mapY(254),
-                        child: Transform.scale(
-                          scale: transform.scale,
-                          alignment: Alignment.topLeft,
-                          child: SizedBox(
-                            width: 310,
-                            height: 456,
-                            child: ListView(
-                              scrollDirection: Axis.horizontal,
-                              clipBehavior: Clip.none,
-                              controller: _scrollController,
-                              physics: const BouncingScrollPhysics(
-                                parent: AlwaysScrollableScrollPhysics(),
-                              ),
-                              padding: const EdgeInsets.only(right: _cardGap),
-                              children: [
-                                _PlanCard(
-                                  width: _cardWidth,
-                                  active: _selectedPlan == 0,
-                                  eliteUnlocked: _eliteUnlocked,
-                                  onTap: () =>
-                                      setState(() => _selectedPlan = 0),
-                                ),
-                                const SizedBox(width: _cardGap),
-                                _InactivePlanCard(
-                                  width: _cardWidth,
-                                  active: _selectedPlan == 1,
-                                  onTap: () =>
-                                      setState(() => _selectedPlan = 1),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // Indicador de página (bolinhas)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        top: transform.mapY(720),
-                        child: Transform.scale(
-                          scale: transform.scale,
-                          alignment: Alignment.topCenter,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                    Positioned(
+                      left: transform.mapX(65),
+                      top: transform.mapY(123),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: const SizedBox(
+                          width: 260,
+                          height: 95,
+                          child: Column(
                             children: [
-                              _PageDot(active: _selectedPlan == 0),
-                              const SizedBox(width: 8),
-                              _PageDot(active: _selectedPlan == 1),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // Link "Cupom de desconto" (rodapé, sublinhado)
-                      Positioned(
-                        left: transform.mapX(24),
-                        top: transform.mapY(757),
-                        child: Transform.scale(
-                          scale: transform.scale,
-                          alignment: Alignment.topLeft,
-                          child: SizedBox(
-                            width: 342,
-                            child: GestureDetector(
-                              onTap: _showCouponModal,
-                              child: const Text(
-                                'Cupom de desconto',
+                              Text(
+                                'Escolha seu plano',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontFamily: 'Netflix Sans',
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.4167, // 34/24
+                                  letterSpacing: 0,
+                                ),
+                              ),
+                              SizedBox(height: 5),
+                              Text(
+                                'Sem compromissos, cancele quando quiser.',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: Color(0xFF9E9E9E),
                                   fontSize: 14,
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Netflix Sans',
                                   fontWeight: FontWeight.w500,
                                   height: 1.5714, // 22/14
                                   letterSpacing: 0,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: Color(0xFF9E9E9E),
                                 ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Carousel de cards de plano (x=24, y=254, 310×456).
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(254),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: 310,
+                          height: 456,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            clipBehavior: Clip.none,
+                            controller: _scrollController,
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            padding: const EdgeInsets.only(right: _cardGap),
+                            children: [
+                              _PlanCard(
+                                width: _cardWidth,
+                                active: _selectedPlan == 0,
+                                eliteUnlocked: _eliteUnlocked,
+                                onTap: () => setState(() => _selectedPlan = 0),
+                              ),
+                              const SizedBox(width: _cardGap),
+                              _InactivePlanCard(
+                                width: _cardWidth,
+                                active: _selectedPlan == 1,
+                                onTap: () => setState(() => _selectedPlan = 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Indicador de página (bolinhas)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: transform.mapY(720),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topCenter,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _PageDot(active: _selectedPlan == 0),
+                            const SizedBox(width: 8),
+                            _PageDot(active: _selectedPlan == 1),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Link "Cupom de desconto" (rodapé, sublinhado)
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(757),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: 342,
+                          child: GestureDetector(
+                            onTap: _showCouponModal,
+                            child: const Text(
+                              'Cupom de desconto',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Color(0xFF9E9E9E),
+                                fontSize: 14,
+                                fontFamily: 'Netflix Sans',
+                                fontWeight: FontWeight.w500,
+                                height: 1.5714, // 22/14
+                                letterSpacing: 0,
+                                decoration: TextDecoration.underline,
+                                decorationColor: Color(0xFF9E9E9E),
                               ),
                             ),
                           ),
                         ),
                       ),
+                    ),
                   ],
                 ),
               );
@@ -538,7 +536,7 @@ class _PlanCard extends StatelessWidget {
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 16,
-                          fontFamily: 'Inter',
+                          fontFamily: 'Netflix Sans',
                           fontWeight: FontWeight.w500,
                           height: 1.5,
                           letterSpacing: 0,
@@ -558,7 +556,7 @@ class _PlanCard extends StatelessWidget {
                       style: TextStyle(
                         color: Color(0xFFA259FF),
                         fontSize: 27.26,
-                        fontFamily: 'Inter',
+                        fontFamily: 'Netflix Sans',
                         fontWeight: FontWeight.w600,
                         height: 1.4167, // 38.625/27.26
                         letterSpacing: 0,
@@ -579,7 +577,7 @@ class _PlanCard extends StatelessWidget {
                         style: TextStyle(
                           color: Color(0xFFA259FF),
                           fontSize: 25,
-                          fontFamily: 'Inter',
+                          fontFamily: 'Netflix Sans',
                           fontWeight: FontWeight.w600,
                           height: 1.3,
                         ),
@@ -593,7 +591,7 @@ class _PlanCard extends StatelessWidget {
                     style: TextStyle(
                       color: Color(0xFF9E9E9E),
                       fontSize: 11,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w400,
                       height: 1.4,
                       letterSpacing: 0,
@@ -679,7 +677,7 @@ class _PlanCard extends StatelessWidget {
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 14,
-                        fontFamily: 'Inter',
+                        fontFamily: 'Netflix Sans',
                         fontWeight: FontWeight.w500,
                         height: 1.5714, // 22/14
                         letterSpacing: 0,
@@ -746,7 +744,7 @@ class _InactivePlanCard extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 1.5,
                     ),
@@ -760,7 +758,7 @@ class _InactivePlanCard extends StatelessWidget {
                       style: TextStyle(
                         color: Color(0xFF9E9E9E),
                         fontSize: 27.26,
-                        fontFamily: 'Inter',
+                        fontFamily: 'Netflix Sans',
                         fontWeight: FontWeight.w600,
                         height: 1.4167,
                       ),
@@ -798,7 +796,7 @@ class _InactivePlanCard extends StatelessWidget {
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 14,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w500,
                   height: 1.5714,
                 ),
@@ -850,7 +848,7 @@ class _FeatureRow extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xFF9E9E9E),
               fontSize: 15.9,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w400,
               height: 1.5714, // 24.99/15.9
               letterSpacing: 0,

@@ -73,281 +73,286 @@ class _ControlRecomendationState extends State<ControlRecomendation> {
         backgroundColor: const Color(0xFF0D0D0D),
         body: SafeArea(
           child: LayoutBuilder(
-          builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, constraints.maxHeight);
-          final transform = DesignTransform.fromSize(size);
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, constraints.maxHeight);
+              final transform = DesignTransform.fromSize(size);
 
-          return SizedBox(
-            width: size.width,
-            height: size.height,
-            child: Stack(
-              fit: StackFit.expand,
-              clipBehavior: Clip.none,
-              children: [
-                // Fundo preto base
-                const ColoredBox(color: Color(0xFF0D0D0D)),
+              return SizedBox(
+                width: size.width,
+                height: size.height,
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Fundo preto base
+                    const ColoredBox(color: Color(0xFF0D0D0D)),
 
-                // Glow cinza (Ellipse 1500, x=215, y=-144, 350×350, blur 300)
-                Positioned(
-                  left: transform.mapX(215),
-                  top: transform.mapY(-144),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                      child: Container(
-                        width: 350,
-                        height: 350,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Color(0xFF2C2C2C),
+                    // Glow cinza (Ellipse 1500, x=215, y=-144, 350×350, blur 300)
+                    Positioned(
+                      left: transform.mapX(215),
+                      top: transform.mapY(-144),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 300,
+                            sigmaY: 300,
+                          ),
+                          child: Container(
+                            width: 350,
+                            height: 350,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Color(0xFF2C2C2C),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Barra de progresso (x=24, y=80, 342×3)
-                Positioned(
-                  left: transform.mapX(24),
-                  top: transform.mapY(80),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: const SizedBox(
-                      width: 342,
-                      height: 3,
-                      child: Row(
-                        children: [
-                          // Segmento 1 ativo (111px, branco com sombra roxa)
-                          _ProgressSegment(width: 111, active: true),
-                          SizedBox(width: 5),
-                          // Segmento 2 (110px, branco 20%)
-                          _ProgressSegment(width: 110, active: false),
-                          SizedBox(width: 5),
-                          // Segmento 3 (111px, branco 20%)
-                          _ProgressSegment(width: 111, active: false),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Título + subtítulo (x=65, y=123, 260×95)
-                Positioned(
-                  left: transform.mapX(65),
-                  top: transform.mapY(123),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: const SizedBox(
-                      width: 260,
-                      height: 95,
-                      child: Column(
-                        children: [
-                          Text(
-                            'Personalize seu feed',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w600,
-                              height: 1.4167, // 34/24
-                              letterSpacing: 0,
-                            ),
-                          ),
-                          SizedBox(height: 5),
-                          Text(
-                            'Escolha pelo menos 3 gêneros',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Color(0xFF9E9E9E),
-                              fontSize: 14,
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w400,
-                              height: 1.5714, // 22/14
-                              letterSpacing: 0,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Grid de cards de gênero
-                Positioned(
-                  left: 0,
-                  top: transform.mapY(220),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: SizedBox(
-                      width: size.width / transform.scale,
-                      height:
-                          593, // área de rolagem: y=251 até y=844 (sob o fade)
-                      child: ShaderMask(
-                        // Máscara superior temporariamente desativada.
-                        // Para reativar, troque BlendMode.dst por BlendMode.dstIn.
-                        // blendMode: BlendMode.dstIn,
-                        blendMode: BlendMode.dst,
-                        shaderCallback: (bounds) => const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            Colors.black,
-                            Colors.black,
-                          ],
-                          // O fade termina logo antes do primeiro card
-                          // (padding superior de 100px), sem cobrir o grid.
-                          stops: [0.0, 0.14, 1.0],
-                        ).createShader(bounds),
-                        child: PageView(
-                          controller: _genrePageController,
-                          clipBehavior: Clip.hardEdge,
-                          physics: const PageScrollPhysics(),
-                          onPageChanged: (page) => setState(() => _genrePage = page),
-                          children: [
-                            _GenrePage(
-                              topPadding: 0,
-                              children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
+                    // Barra de progresso (x=24, y=80, 342×3)
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(80),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: const SizedBox(
+                          width: 342,
+                          height: 3,
+                          child: Row(
                             children: [
-                              _GenreCard(
-                                label: 'Marvel',
-                                image:
-                                    'assets/images/rectangle-395047-8b3ec893.png',
-                                selected: _selected.contains(0),
-                                onTap: () => _toggle(0),
+                              // Segmento 1 ativo (111px, branco com sombra roxa)
+                              _ProgressSegment(width: 111, active: true),
+                              SizedBox(width: 5),
+                              // Segmento 2 (110px, branco 20%)
+                              _ProgressSegment(width: 110, active: false),
+                              SizedBox(width: 5),
+                              // Segmento 3 (111px, branco 20%)
+                              _ProgressSegment(width: 111, active: false),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Título + subtítulo (x=65, y=123, 260×95)
+                    Positioned(
+                      left: transform.mapX(65),
+                      top: transform.mapY(123),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: const SizedBox(
+                          width: 260,
+                          height: 95,
+                          child: Column(
+                            children: [
+                              Text(
+                                'Personalize seu feed',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontFamily: 'Netflix Sans',
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.4167, // 34/24
+                                  letterSpacing: 0,
+                                ),
                               ),
-                              const SizedBox(width: 22),
-                              _GenreCard(
-                                label: 'Ficção Científica',
-                                image:
-                                    'assets/images/rectangle-395047-fc8f71de.png',
-                                selected: _selected.contains(1),
-                                onTap: () => _toggle(1),
+                              SizedBox(height: 5),
+                              Text(
+                                'Escolha pelo menos 3 gêneros',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Color(0xFF9E9E9E),
+                                  fontSize: 14,
+                                  fontFamily: 'Netflix Sans',
+                                  fontWeight: FontWeight.w400,
+                                  height: 1.5714, // 22/14
+                                  letterSpacing: 0,
+                                ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 22),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _GenreCard(
-                                label: 'Suspense',
-                                image:
-                                    'assets/images/rectangle-395047-d712f5e6.png',
-                                selected: _selected.contains(2),
-                                onTap: () => _toggle(2),
-                              ),
-                              const SizedBox(width: 22),
-                              _GenreCard(
-                                label: 'Crime',
-                                image:
-                                    'assets/images/rectangle-395047-44b1c56e.png',
-                                selected: _selected.contains(3),
-                                onTap: () => _toggle(3),
-                              ),
-                            ],
-                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Grid de cards de gênero
+                    Positioned(
+                      left: 0,
+                      top: transform.mapY(220),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: size.width / transform.scale,
+                          height:
+                              593, // área de rolagem: y=251 até y=844 (sob o fade)
+                          child: ShaderMask(
+                            // Máscara superior temporariamente desativada.
+                            // Para reativar, troque BlendMode.dst por BlendMode.dstIn.
+                            // blendMode: BlendMode.dstIn,
+                            blendMode: BlendMode.dst,
+                            shaderCallback: (bounds) => const LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black,
+                                Colors.black,
                               ],
-                            ),
-                            _GenrePage(
-                              topPadding: 0,
+                              // O fade termina logo antes do primeiro card
+                              // (padding superior de 100px), sem cobrir o grid.
+                              stops: [0.0, 0.14, 1.0],
+                            ).createShader(bounds),
+                            child: PageView(
+                              controller: _genrePageController,
+                              clipBehavior: Clip.hardEdge,
+                              physics: const PageScrollPhysics(),
+                              onPageChanged: (page) =>
+                                  setState(() => _genrePage = page),
                               children: [
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
+                                _GenrePage(
+                                  topPadding: 0,
                                   children: [
-                                    _GenreCard(
-                                      label: 'Marvel',
-                                      image: 'assets/images/img-bd4a2b95.png',
-                                      selected: _selected.contains(4),
-                                      onTap: () => _toggle(4),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _GenreCard(
+                                          label: 'Marvel',
+                                          image:
+                                              'assets/images/rectangle-395047-8b3ec893.png',
+                                          selected: _selected.contains(0),
+                                          onTap: () => _toggle(0),
+                                        ),
+                                        const SizedBox(width: 22),
+                                        _GenreCard(
+                                          label: 'Ficção Científica',
+                                          image:
+                                              'assets/images/rectangle-395047-fc8f71de.png',
+                                          selected: _selected.contains(1),
+                                          onTap: () => _toggle(1),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 22),
-                                    _GenreCard(
-                                      label: 'Marvel',
-                                      image:
-                                          'assets/images/f87d8559b051e037278ee52175df4f0ceb0616668d8ee129263fa27addf0f2c0.png',
-                                      selected: _selected.contains(5),
-                                      onTap: () => _toggle(5),
+                                    const SizedBox(height: 22),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _GenreCard(
+                                          label: 'Suspense',
+                                          image:
+                                              'assets/images/rectangle-395047-d712f5e6.png',
+                                          selected: _selected.contains(2),
+                                          onTap: () => _toggle(2),
+                                        ),
+                                        const SizedBox(width: 22),
+                                        _GenreCard(
+                                          label: 'Crime',
+                                          image:
+                                              'assets/images/rectangle-395047-44b1c56e.png',
+                                          selected: _selected.contains(3),
+                                          onTap: () => _toggle(3),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                _GenrePage(
+                                  topPadding: 0,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _GenreCard(
+                                          label: 'Marvel',
+                                          image:
+                                              'assets/images/img-bd4a2b95.png',
+                                          selected: _selected.contains(4),
+                                          onTap: () => _toggle(4),
+                                        ),
+                                        const SizedBox(width: 22),
+                                        _GenreCard(
+                                          label: 'Marvel',
+                                          image:
+                                              'assets/images/f87d8559b051e037278ee52175df4f0ceb0616668d8ee129263fa27addf0f2c0.png',
+                                          selected: _selected.contains(5),
+                                          onTap: () => _toggle(5),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
                               ],
                             ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Fade inferior (Rectangle 395053 em cima de 390×191 → y 653 até 844)
+                    Positioned(
+                      left: transform.mapX(0),
+                      top: transform.mapY(653),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: Container(
+                          width: 390,
+                          height: 191,
+                          decoration: const BoxDecoration(
+                            // Fade do Figma (Rectangle 395003):
+                            // - começa transparente (0x0D0D0D com alpha 0) no topo
+                            // do retângulo e vai ficando opaco até logo abaixo do
+                            // meio do botão "Next" (y=738), com a parte escura daí até a base.
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0x000D0D0D), Color(0xFF0D0D0D)],
+                              stops: [0.0, 0.444],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Botão "Next" (x=24, y=709, 342×50)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: transform.mapY(680),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topCenter,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _GenrePageDot(active: _genrePage == 0),
+                            const SizedBox(width: 8),
+                            _GenrePageDot(active: _genrePage == 1),
                           ],
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Fade inferior (Rectangle 395053 em cima de 390×191 → y 653 até 844)
-                Positioned(
-                  left: transform.mapX(0),
-                  top: transform.mapY(653),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: Container(
-                      width: 390,
-                      height: 191,
-                      decoration: const BoxDecoration(
-                        // Fade do Figma (Rectangle 395003):
-                        // - começa transparente (0x0D0D0D com alpha 0) no topo
-                        // do retângulo e vai ficando opaco até logo abaixo do
-                        // meio do botão "Next" (y=738), com a parte escura daí até a base.
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0x000D0D0D), Color(0xFF0D0D0D)],
-                          stops: [0.0, 0.444],
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(709),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: _NextButton(
+                          enabled: _selected.length >= 3,
+                          onTap: _goToProfile,
                         ),
                       ),
                     ),
-                  ),
-                ),
 
-                // Botão "Next" (x=24, y=709, 342×50)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: transform.mapY(680),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topCenter,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _GenrePageDot(active: _genrePage == 0),
-                        const SizedBox(width: 8),
-                        _GenrePageDot(active: _genrePage == 1),
-                      ],
-                    ),
-                  ),
-                ),
-
-                Positioned(
-                  left: transform.mapX(24),
-                  top: transform.mapY(709),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: _NextButton(
-                      enabled: _selected.length >= 3,
-                      onTap: _goToProfile,
-                    ),
-                  ),
-                ),
-
-                // Texto "Skip" (x=181, y=777, 29×22)
-                /*
+                    // Texto "Skip" (x=181, y=777, 29×22)
+                    /*
                 Positioned(
                   left: transform.mapX(181),
                   top: transform.mapY(777),
@@ -362,7 +367,7 @@ class _ControlRecomendationState extends State<ControlRecomendation> {
                         style: TextStyle(
                           color: Color(0xFF525252),
                           fontSize: 14,
-                          fontFamily: 'Inter',
+                          fontFamily: 'Netflix Sans',
                           fontWeight: FontWeight.w500,
                           height: 1.5714, // 22/14
                           letterSpacing: 0,
@@ -372,10 +377,10 @@ class _ControlRecomendationState extends State<ControlRecomendation> {
                   ),
                 ),
                 */
-              ],
-            ),
-          );
-        },
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -462,7 +467,7 @@ class _NextButton extends StatelessWidget {
               style: TextStyle(
                 color: enabled ? Colors.white : const Color(0xFF9E9E9E),
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.5714, // 22/14
                 letterSpacing: 0,
@@ -569,7 +574,7 @@ class _GenreCard extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.5714, // 22/14
                 letterSpacing: 0,

@@ -241,7 +241,7 @@ class _SignInState extends State<SignIn> {
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 20,
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Netflix Sans',
                                   fontWeight: FontWeight.w600,
                                   height: 1.4167, // 34/24
                                   letterSpacing: 0,
@@ -254,7 +254,7 @@ class _SignInState extends State<SignIn> {
                                 style: TextStyle(
                                   color: Color(0xFF9E9E9E),
                                   fontSize: 14,
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Netflix Sans',
                                   fontWeight: FontWeight.w400,
                                   height: 1.5714, // 22/14
                                   letterSpacing: 0,
@@ -301,7 +301,7 @@ class _SignInState extends State<SignIn> {
                                     style: const TextStyle(
                                       color: Color(0xFF525252),
                                       fontSize: 12,
-                                      fontFamily: 'Inter',
+                                      fontFamily: 'Netflix Sans',
                                       fontWeight: FontWeight.w500,
                                       height: 1.3333, // 16/12
                                       letterSpacing: 0,
@@ -354,7 +354,7 @@ class _SignInState extends State<SignIn> {
                                 style: TextStyle(
                                   color: Color(0xFF525252),
                                   fontSize: 14,
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Netflix Sans',
                                   fontWeight: FontWeight.w500,
                                   height: 1.5714, // 22/14
                                   letterSpacing: 0,
@@ -365,7 +365,7 @@ class _SignInState extends State<SignIn> {
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Netflix Sans',
                                   fontWeight: FontWeight.w500,
                                   height: 1.5714, // 22/14
                                   letterSpacing: 0,
@@ -420,7 +420,7 @@ class _ErrorAlert extends StatelessWidget {
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 12,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.3333,
                 letterSpacing: 0,
@@ -472,7 +472,7 @@ class _TextFieldState extends State<_TextField> {
         style: TextStyle(
           color: widget.error ? const Color(0xFFAD2536) : Colors.white,
           fontSize: 12,
-          fontFamily: 'Inter',
+          fontFamily: 'Netflix Sans',
           fontWeight: FontWeight.w500,
           height: 1.3333,
           letterSpacing: 0,
@@ -487,7 +487,7 @@ class _TextFieldState extends State<_TextField> {
           hintStyle: const TextStyle(
             color: Color(0xFF9E9E9E),
             fontSize: 12,
-            fontFamily: 'Inter',
+            fontFamily: 'Netflix Sans',
             fontWeight: FontWeight.w500,
             height: 1.3333,
             letterSpacing: 0,
@@ -527,7 +527,7 @@ class _PasswordFieldState extends State<_PasswordField> {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.3333,
                 letterSpacing: 0,
@@ -541,7 +541,7 @@ class _PasswordFieldState extends State<_PasswordField> {
                 hintStyle: TextStyle(
                   color: Color(0xFF9E9E9E),
                   fontSize: 12,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w500,
                   height: 1.3333,
                   letterSpacing: 0,
@@ -606,7 +606,7 @@ class _OrDivider extends StatelessWidget {
               style: TextStyle(
                 color: Color(0xFF525252),
                 fontSize: 12,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.3333, // 16/12
                 letterSpacing: 0,
@@ -666,7 +666,7 @@ class _SignInButton extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 1.57,
                       letterSpacing: 0,

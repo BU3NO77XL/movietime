@@ -39,12 +39,12 @@ class _VideoQualityScreenState extends State<VideoQualityScreen> {
                       ),
                     ),
                     const Text(
-                      'Video quality',
+                      'Qualidade de vídeo',
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
-                        fontFamily: 'Inter',
+                        fontFamily: 'Netflix Sans',
                         fontWeight: FontWeight.w500,
                         height: 1.5,
                       ),
@@ -122,7 +122,7 @@ class _QualitySection extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
 
-  static const _labels = ['Low', 'Medium', 'High'];
+  static const _labels = ['Baixa', 'Média', 'Alta'];
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +135,7 @@ class _QualitySection extends StatelessWidget {
           style: const TextStyle(
             color: Colors.white,
             fontSize: 14,
-            fontFamily: 'Inter',
+            fontFamily: 'Netflix Sans',
             fontWeight: FontWeight.w500,
             height: 1.57,
           ),
@@ -217,7 +217,7 @@ class _QualityButton extends StatelessWidget {
             style: TextStyle(
               color: selected ? Colors.white : VideoQualityScreen.lightMuted,
               fontSize: 14,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
               height: 1.57,
             ),
@@ -244,11 +244,11 @@ class _DataNotice extends StatelessWidget {
         SizedBox(width: 20),
         Expanded(
           child: Text(
-            'Streaming higher video quality over a mobile\ndata connection will use more data.',
+            'Assistir em qualidade superior usando\ndados móveis consumirá mais dados.',
             style: TextStyle(
               color: VideoQualityScreen.muted,
               fontSize: 14,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
               height: 1.57,
             ),

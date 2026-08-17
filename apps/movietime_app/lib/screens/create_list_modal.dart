@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-const kDefaultListName = 'Must watch';
+const kDefaultListName = 'Assistir depois';
 
 Future<String?> showCreateListModal(
   BuildContext context, {
@@ -92,7 +92,7 @@ class _CreateListDialogState extends State<_CreateListDialog> {
                   style: TextStyle(
                     color: Color(0xFF9E9E9E),
                     fontSize: 14,
-                    fontFamily: 'Inter',
+                    fontFamily: 'Netflix Sans',
                     fontWeight: FontWeight.w500,
                     height: 22 / 14,
                   ),
@@ -109,7 +109,7 @@ class _CreateListDialogState extends State<_CreateListDialog> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 24 / 16,
                     ),
@@ -122,21 +122,15 @@ class _CreateListDialogState extends State<_CreateListDialog> {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF2C2C2C),
-                        ),
+                        borderSide: const BorderSide(color: Color(0xFF2C2C2C)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF2C2C2C),
-                        ),
+                        borderSide: const BorderSide(color: Color(0xFF2C2C2C)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF525252),
-                        ),
+                        borderSide: const BorderSide(color: Color(0xFF525252)),
                       ),
                     ),
                     onSubmitted: (_) => _create(),
@@ -164,7 +158,7 @@ class _CreateListDialogState extends State<_CreateListDialog> {
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 14,
-                          fontFamily: 'Inter',
+                          fontFamily: 'Netflix Sans',
                           fontWeight: FontWeight.w500,
                           height: 22 / 14,
                         ),

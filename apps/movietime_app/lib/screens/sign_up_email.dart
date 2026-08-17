@@ -177,8 +177,7 @@ class _SignUpEmailState extends State<SignUpEmail> {
                             height: 50,
                             child: _ErrorAlert(
                               message: _fieldError!,
-                              onClose: () =>
-                                  setState(() => _fieldError = null),
+                              onClose: () => setState(() => _fieldError = null),
                             ),
                           ),
                         ),
@@ -249,7 +248,7 @@ class _SignUpEmailState extends State<SignUpEmail> {
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 24,
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Netflix Sans',
                                   fontWeight: FontWeight.w600,
                                   height: 1.4167, // 34/24
                                   letterSpacing: 0,
@@ -262,7 +261,7 @@ class _SignUpEmailState extends State<SignUpEmail> {
                                 style: TextStyle(
                                   color: Color(0xFF9E9E9E),
                                   fontSize: 14,
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Netflix Sans',
                                   fontWeight: FontWeight.w400,
                                   height: 1.5714, // 22/14
                                   letterSpacing: 0,
@@ -345,7 +344,7 @@ class _SignUpEmailState extends State<SignUpEmail> {
                                 style: TextStyle(
                                   color: Color(0xFF525252),
                                   fontSize: 14,
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Netflix Sans',
                                   fontWeight: FontWeight.w500,
                                   height: 1.5714, // 22/14
                                   letterSpacing: 0,
@@ -356,7 +355,7 @@ class _SignUpEmailState extends State<SignUpEmail> {
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
-                                  fontFamily: 'Inter',
+                                  fontFamily: 'Netflix Sans',
                                   fontWeight: FontWeight.w500,
                                   height: 1.5714, // 22/14
                                   letterSpacing: 0,
@@ -406,7 +405,7 @@ class _ErrorAlert extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.3333,
                 letterSpacing: 0,
@@ -463,7 +462,7 @@ class _InputField extends StatelessWidget {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 12,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
               height: 1.3333, // 16/12
               letterSpacing: 0,
@@ -477,7 +476,7 @@ class _InputField extends StatelessWidget {
               hintStyle: const TextStyle(
                 color: Color(0xFF9E9E9E),
                 fontSize: 12,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.3333, // 16/12
                 letterSpacing: 0,
@@ -492,7 +491,7 @@ class _InputField extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xFFFF4C61),
               fontSize: 10,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w400,
               height: 1.6, // 16/10
               letterSpacing: 0,
@@ -545,7 +544,7 @@ class _PasswordFieldState extends State<_PasswordField> {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
-                    fontFamily: 'Inter',
+                    fontFamily: 'Netflix Sans',
                     fontWeight: FontWeight.w500,
                     height: 1.3333, // 16/12
                     letterSpacing: 0,
@@ -559,7 +558,7 @@ class _PasswordFieldState extends State<_PasswordField> {
                     hintStyle: TextStyle(
                       color: Color(0xFF9E9E9E),
                       fontSize: 12,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 1.3333, // 16/12
                       letterSpacing: 0,
@@ -590,7 +589,7 @@ class _PasswordFieldState extends State<_PasswordField> {
             style: TextStyle(
               color: Color(0xFFFF4C61),
               fontSize: 10,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w400,
               height: 1.6, // 16/10
               letterSpacing: 0,
@@ -641,7 +640,7 @@ class _TermsCheckbox extends StatelessWidget {
               style: TextStyle(
                 color: Color(0xFF9E9E9E),
                 fontSize: 10,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w400,
                 height: 1.6, // 16/10
                 letterSpacing: 0,
@@ -702,7 +701,7 @@ class _SignUpButton extends StatelessWidget {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 1.5714, // 22/14
                       letterSpacing: 0,

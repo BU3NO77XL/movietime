@@ -30,229 +30,232 @@ class _Intro2State extends State<Intro2> {
     return MediaQuery(
       data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
       child: Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
-      body: SafeArea(
-        child: LayoutBuilder(
-        builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, constraints.maxHeight);
-          final transform = DesignTransform.fromSize(size);
-          // O carrossel ocupa a largura fÃ­sica inteira. Em telas mais largas
-          // que o frame de design, nÃ£o usamos o offset horizontal do frame,
-          // pois isso criaria espaÃ§os entre os posters laterais e as bordas.
-          final carouselDesignWidth = size.width / transform.scale;
+        backgroundColor: const Color(0xFF0D0D0D),
+        body: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, constraints.maxHeight);
+              final transform = DesignTransform.fromSize(size);
+              // O carrossel ocupa a largura fÃ­sica inteira. Em telas mais largas
+              // que o frame de design, nÃ£o usamos o offset horizontal do frame,
+              // pois isso criaria espaÃ§os entre os posters laterais e as bordas.
+              final carouselDesignWidth = size.width / transform.scale;
 
-          return SizedBox(
-            width: size.width,
-            height: size.height,
-            child: Stack(
-              fit: StackFit.expand,
-              clipBehavior: Clip.none,
-              children: [
-                // Fundo preto base
-                const ColoredBox(color: Color(0xFF0D0D0D)),
+              return SizedBox(
+                width: size.width,
+                height: size.height,
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Fundo preto base
+                    const ColoredBox(color: Color(0xFF0D0D0D)),
 
-                // Imagem de fundo com blur (390×586, y=31)
-                Positioned(
-                  left: transform.mapX(0),
-                  top: transform.mapY(31),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
-                      child: Image.asset(
-                        'assets/images/f87d8559b051e037278ee52175df4f0ceb0616668d8ee129263fa27addf0f2c0.png',
-                        width: 390,
-                        height: 586,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Logo MovieTime (x=136, y=114)
-                Positioned(
-                  left: transform.mapX(136),
-                  top: transform.mapY(114),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 27.29,
-                          height: 27.29,
-                          child: IntroLogoMark(),
+                    // Imagem de fundo com blur (390×586, y=31)
+                    Positioned(
+                      left: transform.mapX(0),
+                      top: transform.mapY(31),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 100,
+                            sigmaY: 100,
+                          ),
+                          child: Image.asset(
+                            'assets/images/f87d8559b051e037278ee52175df4f0ceb0616668d8ee129263fa27addf0f2c0.png',
+                            width: 390,
+                            height: 586,
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                        SizedBox(width: 8.69),
-                        MovieTimeLabel(),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Carrossel de imagens (Frame 2147224303, x=0, y=202, 390×220)
-                // Posicionamento absoluto idêntico ao Figma: retângulos laterais
-                // se estendem para fora do frame (clipsContent: false).
-                // Clip.hardEdge corta o conteúdo que sai sem reportar overflow.
-                // Cada poster é envolvido por MotionBlur e animado em loop
-                // (deslocamento horizontal sutil) para gerar o motion blur.
-                Positioned(
-                  left: 0,
-                  top: transform.mapY(202),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    // Carrossel estático (sem animação de motion blur).
-                    child: SizedBox(
-                      width: carouselDesignWidth,
-                      height: 220,
-                      child: Stack(
-                        clipBehavior: Clip.hardEdge,
-                        children: [
-                          // Retângulo esquerdo (Rectangle 395045) - x=-333.96, overlay 40%
-                          Positioned(
-                            left: -333.96,
-                            top: 0,
-                            child: MotionBlurLocal(
-                              enabled: false,
-                              intensity: 1.2,
-                              child: _CarouselImage(
-                                image:
-                                    'assets/images/rectangle-395045-fc8f71de.png',
-                                width: 352.25,
-                                height: 220,
-                                overlayOpacity: 0.4,
-                              ),
-                            ),
-                          ),
-                          // Retângulo central (Rectangle 395043) - x=33.29, y=9, destaque
-                          Positioned(
-                            left: (carouselDesignWidth - 323.43) / 2,
-                            top: 9,
-                            child: MotionBlurLocal(
-                              enabled: false,
-                              intensity: 1.2,
-                              child: _CarouselImage(
-                                image:
-                                    'assets/images/rectangle-395043-573e42d4.png',
-                                width: 323.43,
-                                height: 202,
-                                overlayOpacity: 0,
-                              ),
-                            ),
-                          ),
-                          // Retângulo direito (Rectangle 395044) - x=371.71, overlay 50%
-                          Positioned(
-                            left: carouselDesignWidth - 18.29,
-                            top: 0,
-                            child: MotionBlurLocal(
-                              enabled: false,
-                              intensity: 1.2,
-                              child: _CarouselImage(
-                                image:
-                                    'assets/images/rectangle-395044-cd287cf5.png',
-                                width: 352.25,
-                                height: 220,
-                                overlayOpacity: 0.5,
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
                     ),
-                  ),
-                ),
 
-                // Conteúdo central (x=24, y=483, 342×316)
-                Positioned(
-                  left: transform.mapX(24),
-                  top: transform.mapY(483),
-                  child: Transform.scale(
-                    scale: transform.scale,
-                    alignment: Alignment.topLeft,
-                    child: SizedBox(
-                      width: 342,
-                      height: 316,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Título + subtítulo
-                          SizedBox(
-                            height: 157,
-                            child: Column(
-                              children: [
-                                Text(
-                                  'O entretenimento ficou mais fácil',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 40,
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.w500,
-                                    height: 1.2,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                                SizedBox(height: 10),
-                                Text(
-                                  'Descubra filmes e programas ilimitados, ao seu alcance',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Color(0xFF9E9E9E),
-                                    fontSize: 16,
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.w500,
-                                    height: 1.5,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                              ],
+                    // Logo MovieTime (x=136, y=114)
+                    Positioned(
+                      left: transform.mapX(136),
+                      top: transform.mapY(114),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 27.29,
+                              height: 27.29,
+                              child: IntroLogoMark(),
                             ),
-                          ),
-                          SizedBox(height: 44),
-                          // Botões
-                          SizedBox(
-                            height: 115,
-                            child: Column(
-                              children: [
-                                _GradientButton(
-                                  label: 'Assistir agora',
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => const SignIn(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                SizedBox(height: 15),
-                                _OutlineButton(
-                                  label: 'Cadastre-se',
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => const SignUp(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+                            SizedBox(width: 8.69),
+                            MovieTimeLabel(),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+
+                    // Carrossel de imagens (Frame 2147224303, x=0, y=202, 390×220)
+                    // Posicionamento absoluto idêntico ao Figma: retângulos laterais
+                    // se estendem para fora do frame (clipsContent: false).
+                    // Clip.hardEdge corta o conteúdo que sai sem reportar overflow.
+                    // Cada poster é envolvido por MotionBlur e animado em loop
+                    // (deslocamento horizontal sutil) para gerar o motion blur.
+                    Positioned(
+                      left: 0,
+                      top: transform.mapY(202),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        // Carrossel estático (sem animação de motion blur).
+                        child: SizedBox(
+                          width: carouselDesignWidth,
+                          height: 220,
+                          child: Stack(
+                            clipBehavior: Clip.hardEdge,
+                            children: [
+                              // Retângulo esquerdo (Rectangle 395045) - x=-333.96, overlay 40%
+                              Positioned(
+                                left: -333.96,
+                                top: 0,
+                                child: MotionBlurLocal(
+                                  enabled: false,
+                                  intensity: 1.2,
+                                  child: _CarouselImage(
+                                    image:
+                                        'assets/images/rectangle-395045-fc8f71de.png',
+                                    width: 352.25,
+                                    height: 220,
+                                    overlayOpacity: 0.4,
+                                  ),
+                                ),
+                              ),
+                              // Retângulo central (Rectangle 395043) - x=33.29, y=9, destaque
+                              Positioned(
+                                left: (carouselDesignWidth - 323.43) / 2,
+                                top: 9,
+                                child: MotionBlurLocal(
+                                  enabled: false,
+                                  intensity: 1.2,
+                                  child: _CarouselImage(
+                                    image:
+                                        'assets/images/rectangle-395043-573e42d4.png',
+                                    width: 323.43,
+                                    height: 202,
+                                    overlayOpacity: 0,
+                                  ),
+                                ),
+                              ),
+                              // Retângulo direito (Rectangle 395044) - x=371.71, overlay 50%
+                              Positioned(
+                                left: carouselDesignWidth - 18.29,
+                                top: 0,
+                                child: MotionBlurLocal(
+                                  enabled: false,
+                                  intensity: 1.2,
+                                  child: _CarouselImage(
+                                    image:
+                                        'assets/images/rectangle-395044-cd287cf5.png',
+                                    width: 352.25,
+                                    height: 220,
+                                    overlayOpacity: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Conteúdo central (x=24, y=483, 342×316)
+                    Positioned(
+                      left: transform.mapX(24),
+                      top: transform.mapY(483),
+                      child: Transform.scale(
+                        scale: transform.scale,
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: 342,
+                          height: 316,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Título + subtítulo
+                              SizedBox(
+                                height: 157,
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'O entretenimento ficou mais fácil',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 40,
+                                        fontFamily: 'Netflix Sans',
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.2,
+                                        letterSpacing: 0,
+                                      ),
+                                    ),
+                                    SizedBox(height: 10),
+                                    Text(
+                                      'Descubra filmes e programas ilimitados, ao seu alcance',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Color(0xFF9E9E9E),
+                                        fontSize: 16,
+                                        fontFamily: 'Netflix Sans',
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.5,
+                                        letterSpacing: 0,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: 44),
+                              // Botões
+                              SizedBox(
+                                height: 115,
+                                child: Column(
+                                  children: [
+                                    _GradientButton(
+                                      label: 'Assistir agora',
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => const SignIn(),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    SizedBox(height: 15),
+                                    _OutlineButton(
+                                      label: 'Cadastre-se',
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => const SignUp(),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
+              );
+            },
+          ),
         ),
-      ),
       ),
     );
   }
@@ -296,7 +299,7 @@ class _GradientButton extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.57,
                 letterSpacing: 0,
@@ -335,7 +338,7 @@ class _OutlineButton extends StatelessWidget {
               style: const TextStyle(
                 color: Color(0xFFA259FF),
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.57,
                 letterSpacing: 0,

@@ -62,7 +62,7 @@ class MovieTimeLabel extends StatelessWidget {
       style: TextStyle(
         color: Colors.white,
         fontSize: 15,
-        fontFamily: 'Poppins',
+        fontFamily: 'Netflix Sans',
         fontWeight: FontWeight.w500,
         height: 1.81923,
         letterSpacing: 0,
