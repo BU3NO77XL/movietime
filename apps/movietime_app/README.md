@@ -258,3 +258,11 @@ flutter test test/api_client_test.dart
 - A chave `SUPABASE_SERVICE_ROLE_KEY` deve ficar somente no backend/Vercel.
 - O app salva sessao com `flutter_secure_storage`.
 - Para build Windows com plugins, o Windows pode pedir Developer Mode ativo.
+
+### Publicar uma nova versao Android
+
+1. Copie .env.release.example para .env.release e preencha a URL do Supabase e a Secret Key.
+2. Execute scripts\publish-release.bat.
+3. O script incrementa a versao, gera o APK, envia para o bucket app-releases e registra a release ativa no Supabase.
+
+O arquivo .env.release e ignorado pelo Git e nunca deve ser enviado ao repositorio.
