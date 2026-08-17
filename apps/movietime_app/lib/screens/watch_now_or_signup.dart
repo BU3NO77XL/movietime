@@ -51,7 +51,7 @@ class _Intro2State extends State<Intro2> {
           ),
           FilledButton(
             onPressed: () async {
-              final url = update.downloadUrl ?? update.releaseUrl;
+              final url = update.downloadUrl;
               await launchUrl(url, mode: LaunchMode.externalApplication);
               if (context.mounted) Navigator.of(context).pop();
             },
