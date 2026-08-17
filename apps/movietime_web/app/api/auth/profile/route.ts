@@ -19,6 +19,7 @@ function serializeProfile(profile: any) {
             : [],
           recommendationsUpdatedAt:
             profile.preferences.recommendations_updated_at || null,
+            contentLanguage: profile.preferences.content_language || 'pt-BR',
         }
       : null,
   };

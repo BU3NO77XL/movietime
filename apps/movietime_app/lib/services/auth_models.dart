@@ -42,6 +42,7 @@ class UserPreferences {
     this.avatarIndex,
     this.genres = const [],
     this.recommendationsUpdatedAt,
+    this.contentLanguage,
   });
 
   factory UserPreferences.fromJson(Map<String, dynamic> json) {
@@ -52,10 +53,12 @@ class UserPreferences {
         _ => const [],
       },
       recommendationsUpdatedAt: json['recommendationsUpdatedAt']?.toString(),
+      contentLanguage: json['contentLanguage']?.toString(),
     );
   }
 
   final int? avatarIndex;
   final List<String> genres;
   final String? recommendationsUpdatedAt;
+  final String? contentLanguage;
 }

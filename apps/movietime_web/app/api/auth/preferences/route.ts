@@ -6,13 +6,15 @@ import { getProfileIdFromRequest } from '@/lib/session';
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const profileId = await getProfileIdFromRequest(request, body.userId);
-  const { avatarIndex, genres } = body;
+  const { avatarIndex, genres, contentLanguage = 'pt-BR' } = body;
+  const supportedLanguages = ['pt-BR', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'it-IT'];
 
   if (
     !profileId ||
     avatarIndex == null ||
     !Array.isArray(genres) ||
-    genres.length < 3
+    genres.length < 3 ||
+    !supportedLanguages.includes(contentLanguage)
   ) {
     return NextResponse.json(
       { error: 'Dados de preferencias invalidos.' },
@@ -42,6 +44,7 @@ export async function POST(request: NextRequest) {
         profile_id: profileId,
         avatar_index: Number(avatarIndex),
         genres: genres.join(','),
+        content_language: contentLanguage,
       },
       { onConflict: 'profile_id', ignoreDuplicates: false },
     )

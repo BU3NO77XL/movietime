@@ -87,7 +87,7 @@ class _SettingScreenState extends State<SettingScreen> {
       _selectedAvatar = initialProfile.preferences?.avatarIndex ?? 0;
       _selectedGenres = initialProfile.preferences?.genres ?? const [];
       _loading = false;
-      _loadContentLanguage();
+      _loadContentLanguage(initialProfile.preferences?.contentLanguage);
     } else {
       _loadSettings();
     }
@@ -102,10 +102,10 @@ class _SettingScreenState extends State<SettingScreen> {
     super.dispose();
   }
 
-  Future<void> _loadContentLanguage() async {
+  Future<void> _loadContentLanguage(String? remoteLanguage) async {
     final contentLang = await _storage.read(key: _contentLangKey);
-    if (!mounted || contentLang == null) return;
-    setState(() => _contentLang = contentLang);
+    if (!mounted) return;
+    setState(() => _contentLang = remoteLanguage ?? contentLang ?? 'pt-BR');
   }
 
   Future<void> _loadSettings() async {
@@ -124,7 +124,8 @@ class _SettingScreenState extends State<SettingScreen> {
         _nameController.text = profile.name;
         _selectedAvatar = profile.preferences?.avatarIndex ?? 0;
         _selectedGenres = profile.preferences?.genres ?? const [];
-        _contentLang = contentLang ?? 'pt-BR';
+        _contentLang =
+            profile.preferences?.contentLanguage ?? contentLang ?? 'pt-BR';
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -183,6 +184,7 @@ class _SettingScreenState extends State<SettingScreen> {
         userId: profile.id,
         avatarIndex: _selectedAvatar,
         genres: _selectedGenres,
+        contentLanguage: _contentLang,
       );
       await _storage.write(key: _contentLangKey, value: _contentLang);
       final refreshed = await _authService.profile(profile.id);

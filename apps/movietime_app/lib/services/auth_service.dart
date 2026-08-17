@@ -68,10 +68,16 @@ class AuthService {
     required int userId,
     required int avatarIndex,
     required List<String> genres,
+    required String contentLanguage,
   }) async {
     await _apiClient.postJson(
       '/api/auth/preferences',
-      body: {'userId': userId, 'avatarIndex': avatarIndex, 'genres': genres},
+      body: {
+        'userId': userId,
+        'avatarIndex': avatarIndex,
+        'genres': genres,
+        'contentLanguage': contentLanguage,
+      },
     );
   }
 
