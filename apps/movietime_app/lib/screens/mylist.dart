@@ -7,18 +7,23 @@ import '../services/auth_models.dart';
 import '../services/auth_service.dart';
 import '../services/content_models.dart';
 import '../services/content_service.dart';
+import '../widgets/logo_loader.dart';
 import 'create_list_modal.dart';
 import 'profile.dart';
 import 'screen_transitions.dart';
+import 'see_all_mylist.dart';
 import 'watch.dart';
+import 'watch_series_mylist.dart';
 
 class MyListScreen extends StatefulWidget {
-  const MyListScreen({super.key});
+  const MyListScreen({super.key, this.authService, this.contentService});
+
+  final AuthService? authService;
+  final ContentService? contentService;
 
   static const _bg = Color(0xFF0D0D0D);
   static const _card = Color(0xFF1A1A1A);
   static const _border = Color(0xFF262626);
-  static const _muted = Color(0xFF525252);
   static const _lightMuted = Color(0xFF9E9E9E);
 
   @override
@@ -26,8 +31,9 @@ class MyListScreen extends StatefulWidget {
 }
 
 class _MyListScreenState extends State<MyListScreen> {
-  final AuthService _authService = AuthService();
-  final ContentService _contentService = ContentService();
+  late final AuthService _authService = widget.authService ?? AuthService();
+  late final ContentService _contentService =
+      widget.contentService ?? ContentService();
 
   bool _isLoading = true;
   bool _isSavingListName = false;
@@ -36,6 +42,7 @@ class _MyListScreenState extends State<MyListScreen> {
   String? _listName;
   List<WatchlistItem> _watchlist = const [];
   List<WatchHistoryItem> _history = const [];
+  List<_FeaturedSeries> _featuredSeries = const [];
 
   @override
   void initState() {
@@ -63,9 +70,16 @@ class _MyListScreenState extends State<MyListScreen> {
       final results = await Future.wait([
         _contentService.watchlistData(user.id),
         _contentService.watchHistory(user.id),
+        _contentService.tmdb(
+          'trending/tv/day',
+          query: const {'language': 'pt-BR', 'page': '1'},
+        ),
       ]);
       final watchlist = results[0] as WatchlistResponse;
       final history = results[1] as List<WatchHistoryItem>;
+      final featuredSeries = _parseFeaturedSeries(
+        results[2] as Map<String, dynamic>,
+      );
 
       if (!mounted) return;
       setState(() {
@@ -73,6 +87,7 @@ class _MyListScreenState extends State<MyListScreen> {
         _listName = watchlist.listName ?? user.listName;
         _watchlist = watchlist.items;
         _history = history;
+        _featuredSeries = featuredSeries;
         _isLoading = false;
         _errorMessage = null;
       });
@@ -124,6 +139,17 @@ class _MyListScreenState extends State<MyListScreen> {
       if (!mounted) return;
       setState(() => _isSavingListName = false);
     }
+  }
+
+  Widget _watchRoute(WatchlistItem item) {
+    final isSeries = item.mediaType == 'tv' || item.mediaType == 'series';
+    if (isSeries) {
+      return WatchSeriesMyListScreen(
+        item: item,
+        history: item is WatchHistoryItem ? item : null,
+      );
+    }
+    return WatchScreen.fromWatchlist(item);
   }
 
   Future<void> _removeFromWatchlist(WatchlistItem item) async {
@@ -180,114 +206,265 @@ class _MyListScreenState extends State<MyListScreen> {
                 ),
               ),
             ),
-            RefreshIndicator(
-              color: Colors.white,
-              backgroundColor: const Color(0xFF1A1A1A),
-              onRefresh: () => _loadData(refresh: true),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                padding: const EdgeInsets.fromLTRB(24, 42, 24, 36),
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _listName?.trim().isNotEmpty == true
-                              ? _listName!.trim()
-                              : 'Minha lista',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w600,
-                            height: 1.42,
+            if (_isLoading)
+              const Center(child: LogoLoader())
+            else
+              RefreshIndicator(
+                color: Colors.white,
+                backgroundColor: const Color(0xFF1A1A1A),
+                onRefresh: () => _loadData(refresh: true),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(0, 42, 0, 36),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _listName?.trim().isNotEmpty == true
+                                  ? _listName!.trim()
+                                  : 'Minha lista',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontFamily: 'Netflix Sans',
+                                fontWeight: FontWeight.w600,
+                                height: 1.42,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: _user == null ? null : _editListName,
+                            icon: _isSavingListName
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.edit_outlined,
+                                    color: Colors.white,
+                                  ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _FeaturedSeriesSection(
+                      items: _featuredSeries,
+                      onTap: (item) => Navigator.of(context).push(
+                        cinematicPageRoute(
+                          WatchScreen(
+                            tmdbId: item.tmdbId,
+                            mediaType: 'tv',
+                            title: item.title,
+                            posterUrl: item.posterUrl,
+                            backdropUrl: item.backdropUrl,
                           ),
                         ),
                       ),
-                      IconButton(
-                        onPressed: _user == null ? null : _editListName,
-                        icon: _isSavingListName
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.edit_outlined,
-                                color: Colors.white,
-                              ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _user == null
-                        ? 'Carregando seus dados...'
-                        : 'Seus títulos salvos e vistos recentemente em um só lugar.',
-                    style: const TextStyle(
-                      color: MyListScreen._lightMuted,
-                      fontSize: 13,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w500,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  if (_isLoading)
-                    const _CenteredStatus(
-                      icon: Icons.hourglass_top_rounded,
-                      title: 'Carregando sua lista',
-                      message: 'Buscando watchlist e recentes.',
-                    )
-                  else if (_errorMessage != null)
-                    _CenteredStatus(
-                      icon: Icons.error_outline_rounded,
-                      title: 'Erro ao carregar dados',
-                      message: _errorMessage!,
-                      actionLabel: 'Tentar novamente',
-                      onTap: () => _loadData(refresh: true),
-                    )
-                  else if (_watchlist.isEmpty && _history.isEmpty)
-                    const _CenteredStatus(
-                      icon: Icons.bookmark_border_rounded,
-                      title: 'Sua lista ainda está vazia',
-                      message:
-                          'Quando você salvar um título ou começar a assistir, ele aparece aqui.',
-                    )
-                  else ...[
-                    _SectionHeader(title: 'Adicionados na lista'),
-                    const SizedBox(height: 14),
-                    _PosterRail(
-                      items: _watchlist,
-                      emptyMessage: 'Nenhum título salvo ainda.',
-                      onTap: (item) => Navigator.of(context).push(
-                        cinematicPageRoute(WatchScreen.fromWatchlist(item)),
-                      ),
-                      onRemove: _removeFromWatchlist,
                     ),
                     const SizedBox(height: 28),
-                    _SectionHeader(title: 'Vistos recentemente'),
-                    const SizedBox(height: 14),
-                    _PosterRail(
-                      items: _history,
-                      emptyMessage: 'Seu histórico aparece aqui.',
-                      onTap: (item) => Navigator.of(context).push(
-                        cinematicPageRoute(WatchScreen.fromHistory(item)),
+                    if (_errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: _CenteredStatus(
+                          icon: Icons.error_outline_rounded,
+                          title: 'Erro ao carregar dados',
+                          message: _errorMessage!,
+                          actionLabel: 'Tentar novamente',
+                          onTap: () => _loadData(refresh: true),
+                        ),
+                      )
+                    else if (_watchlist.isEmpty && _history.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 24),
+                        child: _CenteredStatus(
+                          icon: Icons.bookmark_border_rounded,
+                          title: 'Sua lista ainda está vazia',
+                          message:
+                              'Quando você salvar um título ou começar a assistir, ele aparece aqui.',
+                        ),
+                      )
+                    else ...[
+                      _SectionHeader(
+                        title: 'Adicionados na lista',
+                        onSeeAll: _watchlist.length > 7
+                            ? () => Navigator.of(context).push(
+                                cinematicPageRoute(
+                                  SeeAllMyListScreen(
+                                    title: 'Adicionados na lista',
+                                    items: _watchlist,
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
-                    ),
+                      const SizedBox(height: 14),
+                      _PosterRail(
+                        items: _watchlist,
+                        emptyMessage: 'Nenhum título salvo ainda.',
+                        onTap: (item) => Navigator.of(
+                          context,
+                        ).push(cinematicPageRoute(_watchRoute(item))),
+                        onRemove: _removeFromWatchlist,
+                      ),
+                      const SizedBox(height: 28),
+                      _SectionHeader(
+                        title: 'Vistos recentemente',
+                        onSeeAll: _history.length > 7
+                            ? () => Navigator.of(context).push(
+                                cinematicPageRoute(
+                                  SeeAllMyListScreen(
+                                    title: 'Vistos recentemente',
+                                    items: _history,
+                                  ),
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(height: 14),
+                      _PosterRail(
+                        items: _history,
+                        emptyMessage: 'Seu histórico aparece aqui.',
+                        onTap: (item) => Navigator.of(
+                          context,
+                        ).push(cinematicPageRoute(_watchRoute(item))),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+List<_FeaturedSeries> _parseFeaturedSeries(Map<String, dynamic> json) {
+  final results = json['results'];
+  if (results is! List<dynamic>) return const [];
+
+  return [
+        for (final item in results)
+          if (item is Map<String, dynamic>) _FeaturedSeries.fromJson(item),
+      ]
+      .where(
+        (item) =>
+            item.tmdbId > 0 &&
+            (item.backdropUrl != null || item.posterUrl != null),
+      )
+      .take(4)
+      .toList();
+}
+
+class _FeaturedSeries {
+  const _FeaturedSeries({
+    required this.tmdbId,
+    required this.title,
+    required this.posterUrl,
+    this.backdropUrl,
+    this.year,
+  });
+
+  factory _FeaturedSeries.fromJson(Map<String, dynamic> json) {
+    final posterPath = json['poster_path']?.toString();
+    final date = json['first_air_date']?.toString() ?? '';
+    return _FeaturedSeries(
+      tmdbId: (json['id'] as num?)?.toInt() ?? 0,
+      title: (json['name'] ?? json['original_name'] ?? 'Série').toString(),
+      posterUrl: posterPath == null || posterPath.isEmpty
+          ? null
+          : 'https://image.tmdb.org/t/p/w780$posterPath',
+      backdropUrl: json['backdrop_path']?.toString() is String
+          ? 'https://image.tmdb.org/t/p/w1280${json['backdrop_path']}'
+          : null,
+      year: date.length >= 4 ? int.tryParse(date.substring(0, 4)) : null,
+    );
+  }
+
+  final int tmdbId;
+  final String title;
+  final String? posterUrl;
+  final String? backdropUrl;
+  final int? year;
+}
+
+class _FeaturedSeriesSection extends StatelessWidget {
+  const _FeaturedSeriesSection({required this.items, required this.onTap});
+
+  final List<_FeaturedSeries> items;
+  final ValueChanged<_FeaturedSeries> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Imperdíveis',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontFamily: 'Netflix Sans',
+                  fontWeight: FontWeight.w500,
+                  height: 22 / 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        SizedBox(
+          height: 240,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            itemCount: items.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return GestureDetector(
+                onTap: () => onTap(item),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: SizedBox(
+                    width: 180,
+                    height: 240,
+                    child: Image.network(
+                      item.posterUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const ColoredBox(
+                        color: Color(0xFF262626),
+                        child: Icon(
+                          Icons.image_not_supported_outlined,
+                          color: Color(0xFF525252),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -309,6 +486,7 @@ class _PosterRail<T extends WatchlistItem> extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) {
       return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 24),
         padding: const EdgeInsets.all(18),
         decoration: ShapeDecoration(
           gradient: const LinearGradient(
@@ -326,7 +504,7 @@ class _PosterRail<T extends WatchlistItem> extends StatelessWidget {
           style: const TextStyle(
             color: MyListScreen._lightMuted,
             fontSize: 13,
-            fontFamily: 'Inter',
+            fontFamily: 'Netflix Sans',
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -334,10 +512,10 @@ class _PosterRail<T extends WatchlistItem> extends StatelessWidget {
     }
 
     return SizedBox(
-      height: 208,
+      height: 180,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(width: 14),
         itemBuilder: (context, index) {
@@ -366,87 +544,39 @@ class _PosterCard extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: SizedBox(
-        width: 128,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        width: 120,
+        height: 180,
+        child: Stack(
           children: [
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: _RemotePoster(url: item.posterUrl, width: 128),
-                ),
-                if (onRemove != null)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: GestureDetector(
-                      onTap: onRemove,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.72),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.close_rounded,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: _RemotePoster(url: item.posterUrl, width: 120),
+            ),
+            if (onRemove != null)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: onRemove,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.72),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white,
+                      size: 18,
                     ),
                   ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              item.title.isEmpty ? 'Título indisponível' : item.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w600,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              item.mediaType == 'tv' || item.mediaType == 'series'
-                  ? 'Série'
-                  : 'Filme',
-              style: const TextStyle(
-                color: MyListScreen._lightMuted,
-                fontSize: 12,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            if (item is WatchHistoryItem) ...[
-              const SizedBox(height: 4),
-              Text(
-                _historyLabel(item as WatchHistoryItem),
-                style: const TextStyle(
-                  color: MyListScreen._muted,
-                  fontSize: 11,
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w500,
                 ),
               ),
-            ],
           ],
         ),
       ),
     );
-  }
-
-  String _historyLabel(WatchHistoryItem item) {
-    if (item.seasonNumber > 0 && item.episodeNumber > 0) {
-      return 'S${item.seasonNumber} • E${item.episodeNumber}';
-    }
-    return 'Assistido recentemente';
   }
 }
 
@@ -465,7 +595,7 @@ class _RemotePoster extends StatelessWidget {
     return Image.network(
       url!,
       width: width,
-      height: 165,
+      height: 180,
       fit: BoxFit.cover,
       errorBuilder: (_, _, _) => _PosterFallback(width: width),
       loadingBuilder: (context, child, progress) {
@@ -486,7 +616,7 @@ class _PosterFallback extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: width,
-      height: 165,
+      height: 180,
       color: const Color(0xFF1A1A1A),
       alignment: Alignment.center,
       child: loading
@@ -547,7 +677,7 @@ class _CenteredStatus extends StatelessWidget {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 18,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -558,7 +688,7 @@ class _CenteredStatus extends StatelessWidget {
             style: const TextStyle(
               color: MyListScreen._lightMuted,
               fontSize: 13,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
               height: 1.5,
             ),
@@ -580,20 +710,48 @@ class _CenteredStatus extends StatelessWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
+  const _SectionHeader({required this.title, this.onSeeAll});
 
   final String title;
+  final VoidCallback? onSeeAll;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 14,
-        fontFamily: 'Inter',
-        fontWeight: FontWeight.w500,
-        height: 1.57,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontFamily: 'Netflix Sans',
+              fontWeight: FontWeight.w500,
+              height: 1.57,
+            ),
+          ),
+          if (onSeeAll != null)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onSeeAll,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 4),
+                child: Text(
+                  'Ver tudo',
+                  style: TextStyle(
+                    color: Colors.white,
+                    decoration: TextDecoration.underline,
+                    fontSize: 12,
+                    fontFamily: 'Netflix Sans',
+                    fontWeight: FontWeight.w500,
+                    height: 1.33,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -688,7 +846,7 @@ class _NavItem extends StatelessWidget {
                     style: TextStyle(
                       color: color,
                       fontSize: 12,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w700,
                     ),
                   ),

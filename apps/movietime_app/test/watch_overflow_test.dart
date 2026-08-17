@@ -1,17 +1,30 @@
 import 'package:appflutter/screens/watch.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  setUp(() {
+    const channel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async => null);
+  });
   Future<void> pumpAtSize(WidgetTester tester, Size size) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
 
     await tester.pumpWidget(const MaterialApp(home: WatchScreen()));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
   }
 
-  tearDown(() {
+tearDown(() {
+    const channel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
     final view =
         TestWidgetsFlutterBinding.instance.platformDispatcher.views.first;
     view.resetPhysicalSize();
@@ -38,9 +51,10 @@ void main() {
   ) async {
     await pumpAtSize(tester, const Size(390, 844));
 
-    expect(find.byIcon(Icons.bookmark_rounded), findsNothing);
+expect(find.byIcon(Icons.bookmark_rounded), findsNothing);
     await tester.tap(find.byKey(const ValueKey('watch-save-button')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Faça login para salvar na sua lista.'), findsOneWidget);
     expect(tester.takeException(), isNull);

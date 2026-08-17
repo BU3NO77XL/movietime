@@ -138,9 +138,10 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings_outlined).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Setting'), findsOneWidget);
-    expect(find.text('Account'), findsOneWidget);
-    expect(find.text('Subscription plan'), findsOneWidget);
-    expect(find.text('Log out'), findsOneWidget);
+    expect(find.text('Configurações'), findsOneWidget);
+    expect(find.text('Perfil'), findsOneWidget);
+    expect(find.text('Avatar'), findsOneWidget);
+    expect(find.text('Gêneros Preferidos'), findsOneWidget);
+    expect(find.text('Salvar Preferências'), findsOneWidget);
   });
 }

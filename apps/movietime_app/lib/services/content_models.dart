@@ -53,7 +53,11 @@ class WatchHistoryItem extends WatchlistItem {
     super.backdropUrl,
     this.seasonNumber = 0,
     this.episodeNumber = 0,
+    this.totalSeasons = 0,
+    this.totalEpisodes = 0,
+    this.seasonEpisodes = 0,
     this.progressPercent = 0,
+    this.watchedAt,
   });
 
   factory WatchHistoryItem.fromJson(Map<String, dynamic> json) {
@@ -63,13 +67,21 @@ class WatchHistoryItem extends WatchlistItem {
       title: json['title']?.toString() ?? '',
       posterUrl: json['poster_url']?.toString(),
       backdropUrl: json['backdrop_url']?.toString(),
-      seasonNumber: json['season_number'] as int? ?? 0,
-      episodeNumber: json['episode_number'] as int? ?? 0,
-      progressPercent: json['progress_percent'] as int? ?? 0,
+      seasonNumber: (json['season_number'] as num?)?.toInt() ?? 0,
+      episodeNumber: (json['episode_number'] as num?)?.toInt() ?? 0,
+      totalSeasons: (json['total_seasons'] as num?)?.toInt() ?? 0,
+      totalEpisodes: (json['total_episodes'] as num?)?.toInt() ?? 0,
+      seasonEpisodes: (json['season_episodes'] as num?)?.toInt() ?? 0,
+      progressPercent: (json['progress_percent'] as num?)?.toInt() ?? 0,
+      watchedAt: json['watched_at']?.toString(),
     );
   }
 
   final int seasonNumber;
   final int episodeNumber;
+  final int totalSeasons;
+  final int totalEpisodes;
+  final int seasonEpisodes;
   final int progressPercent;
+  final String? watchedAt;
 }

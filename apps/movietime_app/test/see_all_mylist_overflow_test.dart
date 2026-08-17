@@ -51,22 +51,22 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Year'));
+    await tester.tap(find.text('Ano'));
     await tester.pumpAndSettle();
     expect(find.text('2024'), findsWidgets);
     await tester.tap(find.text('2024').last);
     await tester.pumpAndSettle();
-    expect(find.textContaining('Year:', findRichText: true), findsOneWidget);
+    expect(find.textContaining('Ano:', findRichText: true), findsOneWidget);
 
     await tester.drag(
       find.byKey(const ValueKey('see_all_filter_scroll')),
       const Offset(-220, 0),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Rate'));
+    await tester.tap(find.text('Nota'));
     await tester.pumpAndSettle();
     expect(find.text('Mais avaliados'), findsOneWidget);
-    await tester.tap(find.text('Top trending'));
+    await tester.tap(find.text('Em alta'));
     await tester.pumpAndSettle();
 
     await tester.drag(
@@ -87,8 +87,8 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.search_rounded).first);
     await tester.pumpAndSettle();
-    expect(find.text('Search'), findsOneWidget);
-    expect(find.text('Results'), findsOneWidget);
+    expect(find.text('Buscar'), findsOneWidget);
+    expect(find.text('Resultados'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'Severance');
     await tester.pumpAndSettle();

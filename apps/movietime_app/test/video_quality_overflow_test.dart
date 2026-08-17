@@ -76,11 +76,11 @@ void main() {
     final errors = await pumpAndCollect(tester, 390, 844);
     expect(errors, isEmpty);
 
-    await tester.tap(find.text('Low').first);
+    await tester.tap(find.text('Baixa').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('High').last);
+    await tester.tap(find.text('Alta').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Video quality'), findsOneWidget);
+    expect(find.text('Qualidade de vídeo'), findsOneWidget);
   });
 }

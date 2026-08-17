@@ -2,12 +2,17 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../services/content_models.dart';
+import '../services/content_service.dart';
 import '../widgets/home_bottom_nav.dart';
+import 'screen_transitions.dart';
+import 'watch.dart';
 
 class SeeAllMyListScreen extends StatefulWidget {
-  const SeeAllMyListScreen({super.key, this.title});
+  const SeeAllMyListScreen({super.key, this.title, this.items = const []});
 
   final String? title;
+  final List<WatchlistItem> items;
 
   static const _bg = Color(0xFF0D0D0D);
   static const _card = Color(0xFF1A1A1A);
@@ -15,94 +20,109 @@ class SeeAllMyListScreen extends StatefulWidget {
   static const _muted = Color(0xFF525252);
   static const _lightMuted = Color(0xFF9E9E9E);
 
-  static const _items = [
-    _SeeAllItem(
-      image: 'assets/images/rectangle-395047-fc8f71de.png',
-      title: 'You',
-      year: '2025',
-    ),
-    _SeeAllItem(
-      image: 'assets/images/rectangle-395047-44b1c56e.png',
-      title: 'Adolesence',
-      year: '2025',
-    ),
-    _SeeAllItem(
-      image: 'assets/images/rectangle-395047-d712f5e6.png',
-      title: 'Severance',
-      year: '2025',
-    ),
-    _SeeAllItem(
-      image: 'assets/images/rectangle-395047-8b3ec893.png',
-      title: 'The Last of Us',
-      year: '2025',
-    ),
-    _SeeAllItem(
-      image: 'assets/images/rectangle-395045-fc8f71de.png',
-      title: 'The Gorge',
-      year: '2025',
-    ),
-    _SeeAllItem(
-      image: 'assets/images/rectangle-395044-cd287cf5.png',
-      title: 'Arcane',
-      year: '2024',
-    ),
-    _SeeAllItem(
-      image:
-          'assets/mylist/images/image-124baca1cf984ce56d64128e01abcac487ae5a4d.jpg',
-      title: 'The Substance',
-      year: '2024',
-    ),
-    _SeeAllItem(
-      image: 'assets/mylist/images/image-I2749-1196-63-1748.png',
-      title: 'Black Mirror',
-      year: '2025',
-    ),
-    _SeeAllItem(
-      image: 'assets/mylist/images/image-I2749-1198-63-1748.png',
-      title: 'Dune',
-      year: '2024',
-    ),
-    _SeeAllItem(
-      image: 'assets/mylist/images/image-I63-1778-63-1748.png',
-      title: 'Silo',
-      year: '2025',
-    ),
-    _SeeAllItem(
-      image: 'assets/mylist/images/image-I63-1772-63-1748.png',
-      title: 'From',
-      year: '2024',
-    ),
-    _SeeAllItem(
-      image: 'assets/mylist/images/image-I63-1758-63-1748.png',
-      title: 'Dark',
-      year: '2025',
-    ),
-  ];
-
   @override
   State<SeeAllMyListScreen> createState() => _SeeAllMyListScreenState();
 }
 
 class _SeeAllMyListScreenState extends State<SeeAllMyListScreen> {
-  static const _menus = [
-    _FilterMenuData(
-      title: 'G\u00EAnero',
-      options: ['A\u00E7\u00E3o', 'Drama', 'Suspense'],
-    ),
-    _FilterMenuData(title: 'Ano', options: ['2025', '2024', '2023']),
-    _FilterMenuData(
-      title: 'Avalia\u00E7\u00E3o',
-      options: ['Mais avaliados', 'Top trending', 'Populares'],
-    ),
-    _FilterMenuData(
-      title: 'Idioma',
-      options: ['Portugu\u00EAs', 'Ingl\u00EAs', 'Espanhol'],
-    ),
-  ];
+  late final ContentService _contentService = ContentService();
+  late List<_SeeAllItem> _items;
+
+  List<_FilterMenuData> get _menus {
+    final genres = <String>{};
+    final years = <String>{};
+    for (final item in _items) {
+      genres.addAll(item.genres);
+      if (item.year != '\u2014') years.add(item.year);
+    }
+    return [
+      _FilterMenuData(title: 'G\u00EAnero', options: genres.toList()..sort()),
+      _FilterMenuData(
+        title: 'Ano',
+        options: years.toList()..sort((a, b) => b.compareTo(a)),
+      ),
+      const _FilterMenuData(
+        title: 'Avalia\u00E7\u00E3o',
+        options: ['Mais avaliados', 'Em alta', 'Populares'],
+      ),
+      const _FilterMenuData(
+        title: 'Idioma',
+        options: ['Portugu\u00EAs', 'Ingl\u00EAs', 'Espanhol'],
+      ),
+    ];
+  }
 
   final List<int?> _selectedOptions = [null, null, null, null];
   int? _activeFilterIndex;
   bool _searchOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _items = [
+      for (final item in widget.items)
+        _SeeAllItem(
+          content: item,
+          image: item.posterUrl ?? '',
+          title: item.title,
+          year: '\u2014',
+        ),
+    ];
+    _loadMetadata();
+  }
+
+  @override
+  void dispose() {
+    _contentService.close();
+    super.dispose();
+  }
+
+  Future<void> _loadMetadata() async {
+    final enriched = await Future.wait(
+      _items.map((item) async {
+        try {
+          final prefix = item.content.mediaType == 'tv' ? 'tv' : 'movie';
+          final data = await _contentService.tmdb(
+            '$prefix/${item.content.tmdbId}',
+            query: const {'language': 'pt-BR'},
+          );
+          final rawGenres = data['genres'];
+          return item.copyWith(
+            genres: [
+              if (rawGenres is List<dynamic>)
+                for (final genre in rawGenres)
+                  if (genre is Map<String, dynamic>)
+                    genre['name']?.toString() ?? '',
+            ].where((genre) => genre.isNotEmpty).toList(),
+            year: _yearFromData(data)?.toString() ?? '\u2014',
+            rating: (data['vote_average'] as num?)?.toDouble(),
+            language: _languageName(data['original_language']?.toString()),
+          );
+        } catch (_) {
+          return item;
+        }
+      }),
+    );
+    if (!mounted) return;
+    setState(() {
+      _items = enriched;
+    });
+  }
+
+  int? _yearFromData(Map<String, dynamic> data) {
+    final date = (data['release_date'] ?? data['first_air_date'])?.toString();
+    return date != null && date.length >= 4
+        ? int.tryParse(date.substring(0, 4))
+        : null;
+  }
+
+  String _languageName(String? code) {
+    return switch (code) {
+      'pt' => 'Portugu\u00EAs',
+      'es' => 'Espanhol',
+      _ => 'Ingl\u00EAs',
+    };
+  }
 
   void _toggleFilter(int index) {
     setState(() {
@@ -138,9 +158,44 @@ class _SeeAllMyListScreenState extends State<SeeAllMyListScreen> {
     setState(() => _searchOpen = false);
   }
 
+  List<_SeeAllItem> get _filteredItems {
+    final menus = _menus;
+    return _items.where((item) {
+      final genre = _selectedOptions[0] == null
+          ? null
+          : menus[0].options[_selectedOptions[0]!];
+      final year = _selectedOptions[1] == null
+          ? null
+          : menus[1].options[_selectedOptions[1]!];
+      final rating = _selectedOptions[2] == null
+          ? null
+          : menus[2].options[_selectedOptions[2]!];
+      final language = _selectedOptions[3] == null
+          ? null
+          : menus[3].options[_selectedOptions[3]!];
+      if (genre != null && !item.genres.contains(genre)) return false;
+      if (year != null && item.year != year) return false;
+      if (language != null && item.language != language) return false;
+      if (rating == 'Mais avaliados' && (item.rating ?? 0) < 7) return false;
+      if (rating == 'Em alta' && (item.rating ?? 0) < 6) return false;
+      if (rating == 'Populares' && (item.rating ?? 0) < 5) return false;
+      return true;
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final activeFilterIndex = _activeFilterIndex;
+    /* final items = [
+      for (final item in _filteredItems)
+        _SeeAllItem(
+          content: item.content,
+          image: item.image,
+          title: item.title,
+          year: '—',
+        ),
+    ]; */
+    final items = _filteredItems;
 
     return Scaffold(
       backgroundColor: SeeAllMyListScreen._bg,
@@ -158,13 +213,14 @@ class _SeeAllMyListScreenState extends State<SeeAllMyListScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _SeeAllHeader(
-                    title: widget.title ?? 'New released',
+                    title: widget.title ?? 'Novidades',
                     onSearchTap: _openSearch,
                   ),
                   const SizedBox(height: 30),
                   _FilterList(
                     activeIndex: activeFilterIndex,
                     selectedOptions: _selectedOptions,
+                    menus: _menus,
                     onFilterTap: _toggleFilter,
                     onClearFilter: _clearFilter,
                   ),
@@ -177,7 +233,7 @@ class _SeeAllMyListScreenState extends State<SeeAllMyListScreen> {
                       return GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        itemCount: SeeAllMyListScreen._items.length,
+                        itemCount: items.length,
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3,
                           crossAxisSpacing: 15,
@@ -185,7 +241,12 @@ class _SeeAllMyListScreenState extends State<SeeAllMyListScreen> {
                           mainAxisExtent: cardHeight,
                         ),
                         itemBuilder: (context, index) => _SeeAllPoster(
-                          item: SeeAllMyListScreen._items[index],
+                          item: items[index],
+                          onTap: () => Navigator.of(context).push(
+                            cinematicPageRoute(
+                              WatchScreen.fromWatchlist(items[index].content),
+                            ),
+                          ),
                         ),
                       );
                     },
@@ -211,20 +272,17 @@ class _SeeAllMyListScreenState extends State<SeeAllMyListScreen> {
               ),
             ),
           if (activeFilterIndex != null)
-            _FilterPopoverPosition(
-              filterIndex: activeFilterIndex,
-              child: _FilterPopover(
+            Positioned.fill(
+              child: _SeeAllFilterModal(
                 data: _menus[activeFilterIndex],
                 selectedIndex: _selectedOptions[activeFilterIndex],
+                onClose: () => setState(() => _activeFilterIndex = null),
                 onOptionTap: _selectOption,
               ),
             ),
           if (_searchOpen)
             Positioned.fill(
-              child: _SearchOverlay(
-                items: SeeAllMyListScreen._items,
-                onClose: _closeSearch,
-              ),
+              child: _SearchOverlay(items: items, onClose: _closeSearch),
             ),
         ],
       ),
@@ -278,7 +336,7 @@ class _SeeAllHeader extends StatelessWidget {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
               height: 1.5,
             ),
@@ -331,20 +389,22 @@ class _FilterList extends StatelessWidget {
   const _FilterList({
     required this.activeIndex,
     required this.selectedOptions,
+    required this.menus,
     required this.onFilterTap,
     required this.onClearFilter,
   });
 
   final int? activeIndex;
   final List<int?> selectedOptions;
+  final List<_FilterMenuData> menus;
   final ValueChanged<int> onFilterTap;
   final ValueChanged<int> onClearFilter;
 
   static const _filters = [
     _FilterChipData(label: 'G\u00EAnero', minWidth: 116),
-    _FilterChipData(label: 'Year', minWidth: 87),
-    _FilterChipData(label: 'Rate', minWidth: 87),
-    _FilterChipData(label: 'Language', minWidth: 127),
+    _FilterChipData(label: 'Ano', minWidth: 87),
+    _FilterChipData(label: 'Nota', minWidth: 87),
+    _FilterChipData(label: 'Idioma', minWidth: 127),
   ];
 
   @override
@@ -362,8 +422,7 @@ class _FilterList extends StatelessWidget {
               _FilterChip(
                 data: _filters[index],
                 isActive: activeIndex == index,
-                selectedValue: _SeeAllMyListScreenState._menus[index]
-                    .optionLabel(selectedOptions[index]),
+                selectedValue: menus[index].optionLabel(selectedOptions[index]),
                 onTap: () => onFilterTap(index),
                 onClear: () => onClearFilter(index),
               ),
@@ -427,7 +486,7 @@ class _FilterChip extends StatelessWidget {
                   style: const TextStyle(
                     color: SeeAllMyListScreen._lightMuted,
                     fontSize: 14,
-                    fontFamily: 'Inter',
+                    fontFamily: 'Netflix Sans',
                     fontWeight: FontWeight.w500,
                     height: 1.57,
                   ),
@@ -448,7 +507,7 @@ class _FilterChip extends StatelessWidget {
                 style: const TextStyle(
                   color: SeeAllMyListScreen._lightMuted,
                   fontSize: 14,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w500,
                   height: 1.57,
                 ),
@@ -493,6 +552,94 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
+class _SeeAllFilterModal extends StatelessWidget {
+  const _SeeAllFilterModal({
+    required this.data,
+    required this.selectedIndex,
+    required this.onClose,
+    required this.onOptionTap,
+  });
+
+  final _FilterMenuData data;
+  final int? selectedIndex;
+  final VoidCallback onClose;
+  final ValueChanged<int> onOptionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onClose,
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                child: Container(color: const Color(0xCC0D0D0D)),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 42, 24, 36),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          data.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontFamily: 'Netflix Sans',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      _HeaderIconButton(
+                        icon: Icons.close_rounded,
+                        onTap: onClose,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    'Escolha uma opção',
+                    style: TextStyle(
+                      color: SeeAllMyListScreen._lightMuted,
+                      fontSize: 12,
+                      fontFamily: 'Netflix Sans',
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: data.options.length,
+                      itemBuilder: (context, index) => _FilterOptionRow(
+                        label: data.options[index],
+                        selected: selectedIndex == index,
+                        showDivider: index < data.options.length - 1,
+                        onTap: () => onOptionTap(index),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ignore: unused_element
 class _FilterPopoverPosition extends StatelessWidget {
   const _FilterPopoverPosition({
     required this.filterIndex,
@@ -518,6 +665,7 @@ class _FilterPopoverPosition extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _FilterPopover extends StatelessWidget {
   const _FilterPopover({
     required this.data,
@@ -531,52 +679,77 @@ class _FilterPopover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final availableHeight =
+        MediaQuery.sizeOf(context).height -
+        MediaQuery.paddingOf(context).top -
+        163 -
+        16;
+    final preferredHeight = data.title == 'G\u00EAnero' ? 380.0 : 220.0;
+    final popupHeight = preferredHeight
+        .clamp(160.0, availableHeight)
+        .toDouble();
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(
+        child: SizedBox(
           width: 236,
-          padding: const EdgeInsets.fromLTRB(22, 20, 20, 8),
-          decoration: ShapeDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [SeeAllMyListScreen._card, Color(0x330D0D0D)],
-            ),
-            shape: RoundedRectangleBorder(
-              side: const BorderSide(
-                width: 1,
-                color: SeeAllMyListScreen._border,
+          height: popupHeight,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(22, 20, 20, 8),
+            decoration: ShapeDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [SeeAllMyListScreen._card, Color(0x330D0D0D)],
               ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                data.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: SeeAllMyListScreen._lightMuted,
-                  fontSize: 12,
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w500,
-                  height: 1.33,
+              shape: RoundedRectangleBorder(
+                side: const BorderSide(
+                  width: 1,
+                  color: SeeAllMyListScreen._border,
                 ),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(height: 10),
-              for (var index = 0; index < data.options.length; index++)
-                _FilterOptionRow(
-                  label: data.options[index],
-                  selected: selectedIndex == index,
-                  showDivider: index < data.options.length - 1,
-                  onTap: () => onOptionTap(index),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  data.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: SeeAllMyListScreen._lightMuted,
+                    fontSize: 12,
+                    fontFamily: 'Netflix Sans',
+                    fontWeight: FontWeight.w500,
+                    height: 1.33,
+                  ),
                 ),
-            ],
+                const SizedBox(height: 10),
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Column(
+                      children: [
+                        for (
+                          var index = 0;
+                          index < data.options.length;
+                          index++
+                        )
+                          _FilterOptionRow(
+                            label: data.options[index],
+                            selected: selectedIndex == index,
+                            showDivider: index < data.options.length - 1,
+                            onTap: () => onOptionTap(index),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -621,7 +794,7 @@ class _FilterOptionRow extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w500,
                   height: 1.33,
                 ),
@@ -729,12 +902,12 @@ class _SearchOverlayState extends State<_SearchOverlay> {
                     children: [
                       const Expanded(
                         child: Text(
-                          'Search',
+                          'Buscar',
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 24,
-                            fontFamily: 'Inter',
+                            fontFamily: 'Netflix Sans',
                             fontWeight: FontWeight.w600,
                             height: 1.42,
                           ),
@@ -807,18 +980,18 @@ class _SearchInput extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
                 height: 1.57,
               ),
               decoration: const InputDecoration(
                 isCollapsed: true,
                 border: InputBorder.none,
-                hintText: 'Search title or year',
+                hintText: 'Buscar título ou ano',
                 hintStyle: TextStyle(
                   color: SeeAllMyListScreen._muted,
                   fontSize: 14,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w500,
                   height: 1.57,
                 ),
@@ -865,7 +1038,7 @@ class _SearchResults extends StatelessWidget {
             style: const TextStyle(
               color: SeeAllMyListScreen._lightMuted,
               fontSize: 14,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
               height: 1.57,
             ),
@@ -878,11 +1051,11 @@ class _SearchResults extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Results',
+          'Resultados',
           style: TextStyle(
             color: Colors.white,
             fontSize: 14,
-            fontFamily: 'Inter',
+            fontFamily: 'Netflix Sans',
             fontWeight: FontWeight.w500,
             height: 1.57,
           ),
@@ -911,12 +1084,7 @@ class _SearchResultTile extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.asset(
-              item.image,
-              width: 60,
-              height: 60,
-              fit: BoxFit.cover,
-            ),
+            child: _seeAllImage(item.image, width: 60, height: 60),
           ),
           const SizedBox(width: 15),
           Expanded(
@@ -931,7 +1099,7 @@ class _SearchResultTile extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
-                    fontFamily: 'Inter',
+                    fontFamily: 'Netflix Sans',
                     fontWeight: FontWeight.w500,
                     height: 1.57,
                   ),
@@ -943,7 +1111,7 @@ class _SearchResultTile extends StatelessWidget {
                   style: const TextStyle(
                     color: SeeAllMyListScreen._muted,
                     fontSize: 12,
-                    fontFamily: 'Inter',
+                    fontFamily: 'Netflix Sans',
                     fontWeight: FontWeight.w500,
                     height: 1.33,
                   ),
@@ -964,9 +1132,10 @@ class _SearchResultTile extends StatelessWidget {
 }
 
 class _SeeAllPoster extends StatelessWidget {
-  const _SeeAllPoster({required this.item});
+  const _SeeAllPoster({required this.item, required this.onTap});
 
   final _SeeAllItem item;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -974,44 +1143,47 @@ class _SeeAllPoster extends StatelessWidget {
       builder: (context, constraints) {
         final posterHeight = constraints.maxWidth * 162 / 104;
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.asset(
-                item.image,
-                width: double.infinity,
-                height: posterHeight,
-                fit: BoxFit.cover,
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _seeAllImage(
+                  item.image,
+                  width: double.infinity,
+                  height: posterHeight,
+                ),
               ),
-            ),
-            const SizedBox(height: 9),
-            Text(
-              item.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                height: 1.33,
+              const SizedBox(height: 9),
+              Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontFamily: 'Netflix Sans',
+                  fontWeight: FontWeight.w500,
+                  height: 1.33,
+                ),
               ),
-            ),
-            Text(
-              item.year,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: SeeAllMyListScreen._muted,
-                fontSize: 10,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w400,
-                height: 1.6,
+              Text(
+                item.year,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: SeeAllMyListScreen._muted,
+                  fontSize: 10,
+                  fontFamily: 'Netflix Sans',
+                  fontWeight: FontWeight.w400,
+                  height: 1.6,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -1020,14 +1192,77 @@ class _SeeAllPoster extends StatelessWidget {
 
 class _SeeAllItem {
   const _SeeAllItem({
+    required this.content,
     required this.image,
     required this.title,
     required this.year,
+    this.genres = const [],
+    this.rating,
+    this.language,
   });
 
+  _SeeAllItem copyWith({
+    List<String>? genres,
+    String? year,
+    double? rating,
+    String? language,
+  }) {
+    return _SeeAllItem(
+      content: content,
+      image: image,
+      title: title,
+      year: year ?? this.year,
+      genres: genres ?? this.genres,
+      rating: rating ?? this.rating,
+      language: language ?? this.language,
+    );
+  }
+
   final String image;
+  final WatchlistItem content;
   final String title;
   final String year;
+  final List<String> genres;
+  final double? rating;
+  final String? language;
+}
+
+Widget _seeAllImage(
+  String image, {
+  required double width,
+  required double height,
+}) {
+  if (image.isEmpty) {
+    return SizedBox(
+      width: width,
+      height: height,
+      child: const ColoredBox(
+        color: Color(0xFF262626),
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: Color(0xFF525252),
+        ),
+      ),
+    );
+  }
+
+  final isRemote = image.startsWith('http://') || image.startsWith('https://');
+  final child = isRemote
+      ? Image.network(
+          image,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => const ColoredBox(
+            color: Color(0xFF262626),
+            child: Icon(
+              Icons.image_not_supported_outlined,
+              color: Color(0xFF525252),
+            ),
+          ),
+        )
+      : Image.asset(image, width: width, height: height, fit: BoxFit.cover);
+  return child;
 }
 
 class _FilterChipData {
