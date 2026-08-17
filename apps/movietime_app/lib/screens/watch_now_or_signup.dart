@@ -1,7 +1,9 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../services/app_update_service.dart';
 import '../widgets/intro_shared.dart';
 import '../widgets/motion_blur_local.dart';
 import 'sign_in.dart';
@@ -22,6 +24,44 @@ class Intro2 extends StatefulWidget {
 }
 
 class _Intro2State extends State<Intro2> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
+  }
+
+  Future<void> _checkForUpdate() async {
+    final update = await const AppUpdateService().check();
+    if (!mounted || update == null) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Nova versão disponível'),
+        content: Text(
+          update.notes.isEmpty
+              ? 'A versão ${update.versionName} já está disponível.'
+              : 'A versão ${update.versionName} já está disponível.\n\n${update.notes}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Agora não'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final url = update.downloadUrl ?? update.releaseUrl;
+              await launchUrl(url, mode: LaunchMode.externalApplication);
+              if (context.mounted) Navigator.of(context).pop();
+            },
+            child: const Text('Baixar atualização'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Desativa o escalonamento de fonte do sistema neste frame pixel-perfect:
