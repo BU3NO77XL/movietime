@@ -2,13 +2,15 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/content_models.dart';
 import '../services/content_service.dart';
+import '../widgets/netflix_badge.dart';
 import 'create_list_modal.dart';
+import 'embedded_player.dart';
+import '../widgets/logo_loader.dart';
 
 class WatchScreen extends StatefulWidget {
   const WatchScreen({
@@ -19,6 +21,8 @@ class WatchScreen extends StatefulWidget {
     this.posterUrl,
     this.backdropUrl,
     this.overview,
+    this.initialYear,
+    this.initialVoteAverage,
     this.seasonNumber = 1,
     this.episodeNumber = 1,
   });
@@ -63,6 +67,8 @@ class WatchScreen extends StatefulWidget {
   final String? posterUrl;
   final String? backdropUrl;
   final String? overview;
+  final int? initialYear;
+  final double? initialVoteAverage;
   final int seasonNumber;
   final int episodeNumber;
 
@@ -78,8 +84,9 @@ class _WatchScreenState extends State<WatchScreen> {
   bool _isInMyList = false;
   bool _showRatingBadge = false;
   String? _selectedRating;
-  String _selectedWatchTab = 'Episodes';
+  String _selectedWatchTab = 'Episódios';
   bool _isSyncing = false;
+  bool _isLoadingUserState = true;
   int? _userId;
   String? _userName;
   String? _listName;
@@ -87,6 +94,7 @@ class _WatchScreenState extends State<WatchScreen> {
   _WatchContentDetails? _details;
   int _selectedSeason = 1;
   int _selectedEpisode = 1;
+  final Set<int> _watchedEpisodes = <int>{};
   bool _isLoadingSeason = false;
   String? _seasonError;
   _SeasonDetails? _seasonDetails;
@@ -99,18 +107,54 @@ class _WatchScreenState extends State<WatchScreen> {
   final LayerLink _ratingBadgeLayerLink = LayerLink();
   OverlayEntry? _ratingBadgeOverlay;
 
-  static const Map<String, ({double left, double width})> _watchTabMetrics = {
-    'Episodes': (left: 0, width: 75),
-    'Collection': (left: 91, width: 86),
-    'More Like This': (left: 193, width: 119),
-    'Top Cast': (left: 328, width: 75),
-  };
+  bool get _hasCollection => _details?.collectionId != null && !_isSeries;
+
+  List<({String label, double width})> get _availableWatchTabs {
+    if (_isSeries) {
+      return const [
+        (label: 'Episódios', width: 88),
+        (label: 'Mais como este', width: 128),
+        (label: 'Elenco principal', width: 150),
+      ];
+    }
+    if (!_hasCollection) {
+      return const [
+        (label: 'Mais como este', width: 128),
+        (label: 'Elenco principal', width: 150),
+      ];
+    }
+    return const [
+      (label: 'Coleção', width: 74),
+      (label: 'Mais como este', width: 128),
+      (label: 'Elenco principal', width: 150),
+    ];
+  }
+
+  Map<String, ({double left, double width})> get _watchTabMetricsForType {
+    final result = <String, ({double left, double width})>{};
+    var left = 0.0;
+    for (final tab in _availableWatchTabs) {
+      result[tab.label] = (left: left, width: tab.width);
+      left += tab.width + 16;
+    }
+    return result;
+  }
 
   @override
   void initState() {
     super.initState();
+    _details = _WatchContentDetails.fallback(
+      mediaType: _normalizedMediaType,
+      title: widget.title,
+      posterUrl: widget.posterUrl,
+      backdropUrl: widget.backdropUrl,
+      overview: widget.overview,
+      year: widget.initialYear?.toString(),
+      voteAverageLabel: widget.initialVoteAverage?.toStringAsFixed(1),
+    );
     _selectedSeason = widget.seasonNumber;
     _selectedEpisode = widget.episodeNumber;
+    _selectedWatchTab = _availableWatchTabs.first.label;
     _loadUserState();
     _loadContentDetails();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -138,27 +182,31 @@ class _WatchScreenState extends State<WatchScreen> {
         return Positioned.fill(
           child: IgnorePointer(
             ignoring: !_showRatingBadge,
-            child: CompositedTransformFollower(
-              link: _ratingBadgeLayerLink,
-              showWhenUnlinked: false,
-              offset: const Offset(65, -70),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: AnimatedOpacity(
-                  opacity: _showRatingBadge ? 1 : 0,
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  child: AnimatedSlide(
-                    offset: _showRatingBadge
-                        ? Offset.zero
-                        : const Offset(0, 0.12),
-                    duration: const Duration(milliseconds: 220),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _hideRatingBadge,
+              child: CompositedTransformFollower(
+                link: _ratingBadgeLayerLink,
+                showWhenUnlinked: false,
+                offset: const Offset(65, -70),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: AnimatedOpacity(
+                    opacity: _showRatingBadge ? 1 : 0,
+                    duration: const Duration(milliseconds: 180),
                     curve: Curves.easeOutCubic,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: _RatingBadge(
-                        selectedRating: _selectedRating,
-                        onSelected: _selectRating,
+                    child: AnimatedSlide(
+                      offset: _showRatingBadge
+                          ? Offset.zero
+                          : const Offset(0, 0.12),
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: _RatingBadge(
+                          selectedRating: _selectedRating,
+                          onSelected: _selectRating,
+                        ),
                       ),
                     ),
                   ),
@@ -208,20 +256,34 @@ class _WatchScreenState extends State<WatchScreen> {
               ? savedHistory.episodeNumber
               : _selectedEpisode;
         }
+        for (final item in history) {
+          if (item.progressPercent >= 100 && item.episodeNumber > 0) {
+            _watchedEpisodes.add(item.episodeNumber);
+          }
+        }
         _interactionError = null;
+        _isLoadingUserState = false;
       });
     } on ApiException {
       if (!mounted) return;
-      setState(() => _interactionError = null);
+      setState(() {
+        _interactionError = null;
+        _isLoadingUserState = false;
+      });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _interactionError = null);
+      setState(() {
+        _interactionError = null;
+        _isLoadingUserState = false;
+      });
     }
   }
 
   Future<void> _loadContentDetails() async {
     try {
-      final endpoint = _isSeries ? 'tv/${widget.tmdbId}' : 'movie/${widget.tmdbId}';
+      final endpoint = _isSeries
+          ? 'tv/${widget.tmdbId}'
+          : 'movie/${widget.tmdbId}';
       final responses = await Future.wait([
         _contentService.tmdb(endpoint, query: const {'language': 'pt-BR'}),
         _contentService.tmdb(
@@ -340,6 +402,32 @@ class _WatchScreenState extends State<WatchScreen> {
     }
   }
 
+  Future<void> _selectEpisode(int episodeNumber) async {
+    if (episodeNumber == _selectedEpisode) return;
+
+    final previousEpisode = _selectedEpisode;
+    setState(() => _selectedEpisode = episodeNumber);
+
+    final userId = _userId;
+    if (userId == null) return;
+
+    try {
+      await _contentService.saveWatchHistory(
+        userId: userId,
+        tmdbId: widget.tmdbId,
+        mediaType: _normalizedMediaType,
+        title: widget.title,
+        seasonNumber: _isSeries ? _selectedSeason : null,
+        episodeNumber: previousEpisode,
+        progressPercent: 100,
+        posterUrl: widget.posterUrl,
+        backdropUrl: widget.backdropUrl,
+      );
+      if (!mounted) return;
+      setState(() => _watchedEpisodes.add(previousEpisode));
+    } catch (_) {}
+  }
+
   void _hideRatingBadge() {
     if (_ratingBadgeOverlay == null) return;
 
@@ -371,10 +459,13 @@ class _WatchScreenState extends State<WatchScreen> {
   }
 
   void _selectWatchTab(String label) {
+    if (_selectedWatchTab == label) return;
+    final available = _availableWatchTabs;
+    if (!available.any((tab) => tab.label == label)) return;
     setState(() => _selectedWatchTab = label);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollWatchTabIntoView(label);
-      if (label == 'Top Cast') {
+      if (label == 'Elenco principal') {
         _scrollTopCastIntoView();
       }
     });
@@ -489,14 +580,33 @@ class _WatchScreenState extends State<WatchScreen> {
       } catch (_) {}
     }
 
-    final url = _isSeries
-        ? 'https://megaembed.com/embed/${widget.tmdbId}/$_selectedSeason/$_selectedEpisode'
-        : 'https://megaembed.com/embed/${widget.tmdbId}';
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!mounted) return;
-      _showSnack('Não foi possível abrir o player.');
-    }
+    final uri = _megaEmbedStreamUri();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => EmbeddedPlayerScreen(url: uri)),
+    );
+  }
+
+  Future<void> _handleDownload() async {
+    final uri = _megaEmbedDownloadUri();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => EmbeddedPlayerScreen(url: uri)),
+    );
+  }
+
+  Uri _megaEmbedStreamUri() {
+    final path = _isSeries
+        ? '/embed/${widget.tmdbId}/$_selectedSeason/$_selectedEpisode'
+        : '/embed/${widget.tmdbId}';
+    return Uri.https('megaembed.com', path);
+  }
+
+  Uri _megaEmbedDownloadUri() {
+    final path = _isSeries
+        ? '/download/${widget.tmdbId}/$_selectedSeason/$_selectedEpisode'
+        : '/download/${widget.tmdbId}';
+    return Uri.https('megaembedapi.site', path);
   }
 
   bool get _isSeries =>
@@ -513,6 +623,9 @@ class _WatchScreenState extends State<WatchScreen> {
 
   String? get _displayBackdropUrl =>
       _details?.backdropUrl ?? widget.backdropUrl ?? widget.posterUrl;
+
+  String get _watchPosterHeroTag =>
+      'watch-poster-$_normalizedMediaType-${widget.tmdbId}';
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context)
@@ -538,7 +651,7 @@ class _WatchScreenState extends State<WatchScreen> {
   void _scrollWatchTabIntoView(String label, {bool jump = false}) {
     if (!_watchTabController.hasClients) return;
 
-    final metrics = _watchTabMetrics[label];
+    final metrics = _watchTabMetricsForType[label];
     if (metrics == null) return;
 
     final position = _watchTabController.position;
@@ -617,9 +730,7 @@ class _WatchScreenState extends State<WatchScreen> {
                           top: MediaQuery.paddingOf(context).top + 58,
                           child: _HeroActionButtons(
                             isSaved: _isSaved || _isInMyList,
-                            onSaveTap: () {
-                              _toggleMyList();
-                            },
+                            onSaveTap: _toggleMyList,
                           ),
                         ),
                         Positioned(
@@ -629,10 +740,13 @@ class _WatchScreenState extends State<WatchScreen> {
                           child: Center(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(20),
-                              child: _WatchHeroImage(
-                                imageUrl: _displayPosterUrl,
-                                width: 230,
-                                height: 355,
+                              child: Hero(
+                                tag: _watchPosterHeroTag,
+                                child: _WatchHeroImage(
+                                  imageUrl: _displayPosterUrl,
+                                  width: 230,
+                                  height: 355,
+                                ),
                               ),
                             ),
                           ),
@@ -649,7 +763,7 @@ class _WatchScreenState extends State<WatchScreen> {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 28,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 1.36,
                     ),
@@ -660,7 +774,7 @@ class _WatchScreenState extends State<WatchScreen> {
                     style: TextStyle(
                       color: WatchScreen._lightMuted,
                       fontSize: 14,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 1.57,
                     ),
@@ -693,6 +807,7 @@ class _WatchScreenState extends State<WatchScreen> {
                     overview: _displayOverview,
                     details: _details,
                     onPlay: _handlePlay,
+                    onDownload: _handleDownload,
                   ),
                   if (_interactionError != null) ...[
                     const SizedBox(height: 12),
@@ -707,18 +822,18 @@ class _WatchScreenState extends State<WatchScreen> {
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w400,
                       height: 1.57,
                     ),
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Read more',
+                    'Ler mais',
                     style: TextStyle(
                       color: WatchScreen._muted,
                       fontSize: 12,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 1.33,
                     ),
@@ -734,7 +849,7 @@ class _WatchScreenState extends State<WatchScreen> {
                         onMyListTap: _toggleMyList,
                         onRateTap: _toggleRatingBadge,
                         ratingLabel: _selectedRating == null
-                            ? 'Rate'
+                            ? 'Avaliar'
                             : _selectedRating!,
                         isRated: _selectedRating != null,
                         selectedRating: _selectedRating,
@@ -745,9 +860,10 @@ class _WatchScreenState extends State<WatchScreen> {
                   _WatchTabBar(
                     controller: _watchTabController,
                     selectedLabel: _selectedWatchTab,
+                    tabs: _availableWatchTabs,
                     onSelected: _selectWatchTab,
                   ),
-                  SizedBox(height: _selectedWatchTab == 'Episodes' ? 14 : 40),
+                  SizedBox(height: _selectedWatchTab == 'Episódios' ? 14 : 40),
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 260),
                     switchInCurve: Curves.easeOutCubic,
@@ -794,6 +910,13 @@ class _WatchScreenState extends State<WatchScreen> {
                 bottomPadding: MediaQuery.paddingOf(context).bottom,
               ),
             ),
+            if (_isLoadingUserState)
+              const Positioned.fill(
+                child: ColoredBox(
+                  color: WatchScreen._bg,
+                  child: Center(child: LogoLoader()),
+                ),
+              ),
           ],
         ),
       ),
@@ -801,7 +924,7 @@ class _WatchScreenState extends State<WatchScreen> {
   }
 
   Widget _buildSelectedWatchTab() {
-    if (_selectedWatchTab == 'Episodes') {
+    if (_selectedWatchTab == 'Episódios') {
       return KeyedSubtree(
         key: ValueKey('episodes-tab-content'),
         child: _EpisodesSection(
@@ -810,21 +933,19 @@ class _WatchScreenState extends State<WatchScreen> {
           seasonDetails: _seasonDetails,
           selectedSeason: _selectedSeason,
           selectedEpisode: _selectedEpisode,
+          watchedEpisodes: _watchedEpisodes,
           isLoading: _isLoadingSeason,
           errorMessage: _seasonError,
           onSeasonChanged: _loadSeasonDetails,
-          onEpisodeSelected: (episodeNumber) {
-            setState(() => _selectedEpisode = episodeNumber);
-          },
+          onEpisodeSelected: _selectEpisode,
         ),
       );
     }
 
-    if (_selectedWatchTab == 'Collection') {
+    if (_selectedWatchTab == 'Coleção') {
       return KeyedSubtree(
         key: const ValueKey('collection-tab-content'),
         child: _RelatedItemsSection(
-          title: 'Collection',
           items: _collectionItems,
           emptyMessage: _isSeries
               ? 'Collections ficam disponíveis apenas para filmes.'
@@ -834,11 +955,10 @@ class _WatchScreenState extends State<WatchScreen> {
       );
     }
 
-    if (_selectedWatchTab == 'More Like This') {
+    if (_selectedWatchTab == 'Mais como este') {
       return KeyedSubtree(
         key: const ValueKey('similar-tab-content'),
         child: _RelatedItemsSection(
-          title: 'Títulos Semelhantes',
           items: _similarItems,
           emptyMessage: 'Nenhum título semelhante disponível agora.',
           onItemTap: _openRelatedItem,
@@ -846,11 +966,14 @@ class _WatchScreenState extends State<WatchScreen> {
       );
     }
 
-    if (_selectedWatchTab == 'Top Cast') {
+    if (_selectedWatchTab == 'Elenco principal') {
       return KeyedSubtree(
         key: _topCastKey,
         child: Column(
-          children: [_CastRow(cast: _cast), const SizedBox(height: 2)],
+          children: [
+            _CastRow(cast: _cast),
+            const SizedBox(height: 2),
+          ],
         ),
       );
     }
@@ -944,10 +1067,10 @@ class _BackButton extends StatelessWidget {
 }
 
 class _HeroActionButtons extends StatelessWidget {
-  const _HeroActionButtons({required this.isSaved, required this.onSaveTap});
+  const _HeroActionButtons({required this.isSaved, this.onSaveTap});
 
   final bool isSaved;
-  final VoidCallback onSaveTap;
+  final VoidCallback? onSaveTap;
 
   @override
   Widget build(BuildContext context) {
@@ -998,13 +1121,25 @@ class _HeroIconButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
           ),
         ),
-        child: isBookmark && isActive
-            ? const Icon(
-                Icons.bookmark_rounded,
-                color: Color(0xFFFF4C61),
-                size: 20,
-              )
-            : Image.asset(asset, width: 20, height: 20, fit: BoxFit.contain),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: isBookmark && isActive
+              ? const Icon(
+                  Icons.bookmark_rounded,
+                  key: ValueKey('watch-save-bookmark-active'),
+                  color: Color(0xFFFF4C61),
+                  size: 20,
+                )
+              : Image.asset(
+                  asset,
+                  key: ValueKey(asset),
+                  width: 20,
+                  height: 20,
+                  fit: BoxFit.contain,
+                ),
+        ),
       ),
     );
   }
@@ -1078,10 +1213,14 @@ class _PressableScaleState extends State<_PressableScale> {
   }
 }
 
-class _MovieInfoSummary extends StatelessWidget {
+const _fallbackOverviewText =
+    "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard, who's been missing for thirty years.";
+
+class _MovieInfoSummary extends StatefulWidget {
   const _MovieInfoSummary({
     required this.title,
     required this.onPlay,
+    required this.onDownload,
     this.overview,
     this.details,
   });
@@ -1090,84 +1229,149 @@ class _MovieInfoSummary extends StatelessWidget {
   final String? overview;
   final _WatchContentDetails? details;
   final Future<void> Function() onPlay;
+  final Future<void> Function() onDownload;
+
+  @override
+  State<_MovieInfoSummary> createState() => _MovieInfoSummaryState();
+}
+
+class _MovieInfoSummaryState extends State<_MovieInfoSummary> {
+  bool _isExpanded = false;
+
+  String get _description {
+    final overview = widget.overview;
+    return overview?.trim().isNotEmpty == true
+        ? overview!.trim()
+        : _fallbackOverviewText;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 254,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final style = TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontFamily: 'Netflix Sans',
+          fontWeight: FontWeight.w400,
+          height: 22 / 14,
+        );
+        final painter = TextPainter(
+          text: TextSpan(text: _description, style: style),
+          maxLines: 3,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final isTruncated = painter.didExceedMaxLines;
+        final showsNetflixBadge = widget.details?.isNetflix == true;
+
+        return SizedBox(
+          width: double.infinity,
+          height: _isExpanded ? null : 306,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                height: showsNetflixBadge ? 100 : 70,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (showsNetflixBadge)
+                      NetflixBadge(
+                        showSeries: widget.details?.mediaType == 'tv',
+                      ),
+                    SizedBox(
+                      height: 38,
+                      width: double.infinity,
+                      child: Text(
+                        widget.title,
+                        maxLines: 1,
+                        softWrap: false,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontFamily: 'Netflix Sans',
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: -0.25,
+                          height: 38 / 32,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 9),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: widget.details == null
+                          ? const _MetaRowSkeleton(
+                              key: ValueKey('meta-row-loading'),
+                            )
+                          : _MovieMetaRow(
+                              details: widget.details,
+                              key: const ValueKey('meta-row-loaded'),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 8),
+              _WatchInlineButtons(
+                onPlay: widget.onPlay,
+                onDownload: widget.onDownload,
+              ),
+              SizedBox(height: 20),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child:
+                    widget.details == null &&
+                        widget.overview?.trim().isNotEmpty != true
+                    ? const _OverviewSkeleton(key: ValueKey('overview-loading'))
+                    : SizedBox(
+                        key: ValueKey('overview-$_description'),
+                        width: double.infinity,
+                        height: _isExpanded ? null : 70,
+                        child: Text(
+                          _description,
+                          maxLines: _isExpanded ? null : 3,
+                          overflow: _isExpanded ? null : TextOverflow.fade,
+                          style: style,
+                        ),
+                      ),
+              ),
+              if (isTruncated) ...[
+                const SizedBox(height: 2),
                 SizedBox(
-                  height: 20,
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w600,
-                      height: 20 / 18,
+                  height: 16,
+                  child: InkWell(
+                    onTap: () => setState(() => _isExpanded = !_isExpanded),
+                    child: Text(
+                      _isExpanded ? 'Ler menos' : 'Ler mais',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontFamily: 'Netflix Sans',
+                        fontWeight: FontWeight.w500,
+                        height: 16 / 12,
+                        decoration: TextDecoration.underline,
+                        decorationColor: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-                SizedBox(height: 8),
-                _MovieMetaRow(details: details),
               ],
-            ),
+            ],
           ),
-          SizedBox(height: 8),
-          _WatchInlineButtons(onPlay: onPlay),
-          SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 70,
-            child: Text(
-              overview?.trim().isNotEmpty == true
-                  ? overview!.trim()
-                  : "Young Blade Runner K's discovery of a long-buried secret leads him to track down former Blade Runner Rick Deckard, who's been missing for thirty years.",
-              maxLines: 3,
-              overflow: TextOverflow.fade,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w400,
-                height: 22 / 14,
-              ),
-            ),
-          ),
-          SizedBox(height: 2),
-          SizedBox(
-            height: 16,
-            child: Text(
-              'Read more',
-              style: TextStyle(
-                color: WatchScreen._muted,
-                fontSize: 12,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w500,
-                height: 16 / 12,
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
 class _MovieMetaRow extends StatelessWidget {
-  const _MovieMetaRow({this.details});
+  const _MovieMetaRow({super.key, this.details});
 
   final _WatchContentDetails? details;
 
@@ -1190,7 +1394,7 @@ class _MovieMetaRow extends StatelessWidget {
               style: TextStyle(
                 color: Color(0xFF45D468),
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w400,
                 height: 18 / 14,
               ),
@@ -1209,7 +1413,7 @@ class _MovieMetaRow extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
-                    fontFamily: 'Inter',
+                    fontFamily: 'Netflix Sans',
                     fontWeight: FontWeight.w400,
                     height: 18 / 14,
                   ),
@@ -1222,7 +1426,7 @@ class _MovieMetaRow extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w400,
                 height: 18 / 14,
               ),
@@ -1236,7 +1440,7 @@ class _MovieMetaRow extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w400,
                   height: 18 / 14,
                 ),
@@ -1246,6 +1450,102 @@ class _MovieMetaRow extends StatelessWidget {
             const _InfoPill(label: 'HD'),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MetaRowSkeleton extends StatelessWidget {
+  const _MetaRowSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 20,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          children: [
+            const Text(
+              '91% match',
+              style: TextStyle(
+                color: Color(0xFF45D468),
+                fontSize: 14,
+                fontFamily: 'Netflix Sans',
+                fontWeight: FontWeight.w400,
+                height: 18 / 14,
+              ),
+            ),
+            const SizedBox(width: 8),
+            const _SkeletonBar(width: 26, height: 14),
+            const SizedBox(width: 8),
+            const _SkeletonBar(width: 34, height: 14),
+            const SizedBox(width: 8),
+            const _SkeletonPill(),
+            const SizedBox(width: 8),
+            const _SkeletonBar(width: 46, height: 14),
+            const SizedBox(width: 8),
+            const _InfoPill(label: 'HD'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OverviewSkeleton extends StatelessWidget {
+  const _OverviewSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 70,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SkeletonBar(width: double.infinity, height: 14),
+          const SizedBox(height: 8),
+          const _SkeletonBar(width: 250, height: 14),
+          const SizedBox(height: 8),
+          const _SkeletonBar(width: 190, height: 14),
+        ],
+      ),
+    );
+  }
+}
+
+class _SkeletonBar extends StatelessWidget {
+  const _SkeletonBar({required this.width, required this.height});
+
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(3),
+      ),
+    );
+  }
+}
+
+class _SkeletonPill extends StatelessWidget {
+  const _SkeletonPill();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 30,
+      height: 20,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(2),
       ),
     );
   }
@@ -1279,7 +1579,7 @@ class _InfoPill extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 9,
-          fontFamily: 'Inter',
+          fontFamily: 'Netflix Sans',
           fontWeight: FontWeight.w600,
           height: 12 / 9,
           letterSpacing: 0.5,
@@ -1289,10 +1589,17 @@ class _InfoPill extends StatelessWidget {
   }
 }
 
+const _downloadIconSvg = '''
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M3.99902 19H19.999C20.2642 19 20.5186 19.1054 20.7061 19.2929C20.8937 19.4804 20.999 19.7348 20.999 20C20.999 20.2652 20.8937 20.5196 20.7061 20.7071C20.5186 20.8946 20.2642 21 19.999 21H3.99902C3.73381 21 3.47945 20.8946 3.29192 20.7071C3.10438 20.5196 2.99902 20.2652 2.99902 20C2.99902 19.7348 3.10438 19.4804 3.29192 19.2929C3.47945 19.1054 3.73381 19 3.99902 19ZM12.999 13.175L16.242 9.933L17.656 11.347L11.999 17.004L6.34202 11.347L7.75602 9.933L10.999 13.175V2H12.999V13.175Z" fill="white"/>
+</svg>
+''';
+
 class _WatchInlineButtons extends StatelessWidget {
-  const _WatchInlineButtons({required this.onPlay});
+  const _WatchInlineButtons({required this.onPlay, required this.onDownload});
 
   final Future<void> Function() onPlay;
+  final Future<void> Function() onDownload;
 
   @override
   Widget build(BuildContext context) {
@@ -1308,7 +1615,11 @@ class _WatchInlineButtons extends StatelessWidget {
             onTap: onPlay,
           ),
           SizedBox(height: 10),
-          _WatchActionButton(label: 'Trailer'),
+          _WatchActionButton(
+            label: 'Download',
+            iconSvg: _downloadIconSvg,
+            onTap: onDownload,
+          ),
         ],
       ),
     );
@@ -1319,12 +1630,14 @@ class _WatchActionButton extends StatelessWidget {
   const _WatchActionButton({
     required this.label,
     this.icon,
+    this.iconSvg,
     this.primary = false,
     this.onTap,
   });
 
   final String label;
   final IconData? icon;
+  final String? iconSvg;
   final bool primary;
   final Future<void> Function()? onTap;
 
@@ -1349,7 +1662,15 @@ class _WatchActionButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[
+              if (iconSvg != null) ...[
+                SvgPicture.string(
+                  iconSvg!,
+                  width: 24,
+                  height: 24,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(width: 4),
+              ] else if (icon != null) ...[
                 Icon(icon, color: contentColor, size: 32),
                 const SizedBox(width: 4),
               ],
@@ -1358,7 +1679,7 @@ class _WatchActionButton extends StatelessWidget {
                 style: TextStyle(
                   color: contentColor,
                   fontSize: 16,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w600,
                   height: 22 / 16,
                 ),
@@ -1445,7 +1766,11 @@ class _WatchInlineError extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.white,
+            size: 18,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -1453,7 +1778,7 @@ class _WatchInlineError extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 12,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1478,6 +1803,7 @@ class _WatchContentDetails {
     this.episodesCount,
     this.seasons = const [],
     this.collectionId,
+    this.isNetflix = false,
   });
 
   factory _WatchContentDetails.fromJson(
@@ -1500,11 +1826,13 @@ class _WatchContentDetails {
       title: title,
       mediaType: mediaType,
       overview: json['overview']?.toString() ?? fallbackOverview,
-      posterUrl: _tmdbImageUrl(posterPath) ?? fallbackPosterUrl,
+      // Preserve the image already shown by the previous screen. Replacing it
+      // with another TMDB URL after navigation causes a visible second load.
+      posterUrl: fallbackPosterUrl ?? _tmdbImageUrl(posterPath),
       backdropUrl:
-          _tmdbImageUrl(backdropPath, size: 'w1280') ??
           fallbackBackdropUrl ??
-          fallbackPosterUrl,
+          fallbackPosterUrl ??
+          _tmdbImageUrl(backdropPath, size: 'w1280'),
       year: date.length >= 4 ? date.substring(0, 4) : '',
       ageRating: mediaType == 'tv' ? 'TV' : '16+',
       runtimeLabel: runtime > 0 ? _formatRuntime(runtime) : null,
@@ -1513,6 +1841,7 @@ class _WatchContentDetails {
       collectionId: (json['belongs_to_collection'] is Map<String, dynamic>)
           ? ((json['belongs_to_collection']['id'] as num?)?.toInt())
           : null,
+      isNetflix: _isNetflixNetwork(json['networks']),
       seasons: switch (json['seasons']) {
         final List<dynamic> value => [
           for (final season in value)
@@ -1530,6 +1859,9 @@ class _WatchContentDetails {
     String? posterUrl,
     String? backdropUrl,
     String? overview,
+    String? year,
+    String? voteAverageLabel,
+    bool isNetflix = false,
   }) {
     return _WatchContentDetails(
       title: title,
@@ -1537,6 +1869,9 @@ class _WatchContentDetails {
       posterUrl: posterUrl,
       backdropUrl: backdropUrl ?? posterUrl,
       overview: overview,
+      year: year,
+      voteAverageLabel: voteAverageLabel,
+      isNetflix: isNetflix,
     );
   }
 
@@ -1552,6 +1887,16 @@ class _WatchContentDetails {
   final int? episodesCount;
   final List<_SeasonItemDetails> seasons;
   final int? collectionId;
+  final bool isNetflix;
+}
+
+bool _isNetflixNetwork(dynamic networks) {
+  if (networks is! List<dynamic>) return false;
+  return networks.any(
+    (network) =>
+        network is Map<String, dynamic> &&
+        network['name']?.toString().toLowerCase() == 'netflix',
+  );
 }
 
 class _SeasonItemDetails {
@@ -1633,11 +1978,7 @@ class _EpisodeDetails {
 }
 
 class _CastPerson {
-  const _CastPerson({
-    required this.name,
-    required this.role,
-    this.imageUrl,
-  });
+  const _CastPerson({required this.name, required this.role, this.imageUrl});
 
   final String name;
   final String role;
@@ -1706,7 +2047,10 @@ List<_CastPerson> _parseCast(Map<String, dynamic> json) {
         _CastPerson(
           name: item['name']?.toString() ?? 'Elenco',
           role: item['character']?.toString() ?? '',
-          imageUrl: _tmdbImageUrl(item['profile_path']?.toString(), size: 'w185'),
+          imageUrl: _tmdbImageUrl(
+            item['profile_path']?.toString(),
+            size: 'w185',
+          ),
         ),
   ];
 }
@@ -1792,7 +2136,7 @@ class _InfoCard extends StatelessWidget {
             style: const TextStyle(
               color: WatchScreen._muted,
               fontSize: 12,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
               height: 1.33,
             ),
@@ -1811,7 +2155,7 @@ class _InfoCard extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 14,
-                    fontFamily: 'Inter',
+                    fontFamily: 'Netflix Sans',
                     fontWeight: FontWeight.w500,
                     height: 1.57,
                   ),
@@ -1839,7 +2183,7 @@ class _SectionTitle extends StatelessWidget {
       style: const TextStyle(
         color: Colors.white,
         fontSize: 16,
-        fontFamily: 'Inter',
+        fontFamily: 'Netflix Sans',
         fontWeight: FontWeight.w500,
         height: 1.50,
       ),
@@ -1854,6 +2198,7 @@ class _EpisodesSection extends StatelessWidget {
     required this.seasonDetails,
     required this.selectedSeason,
     required this.selectedEpisode,
+    required this.watchedEpisodes,
     required this.isLoading,
     required this.errorMessage,
     required this.onSeasonChanged,
@@ -1865,6 +2210,7 @@ class _EpisodesSection extends StatelessWidget {
   final _SeasonDetails? seasonDetails;
   final int selectedSeason;
   final int selectedEpisode;
+  final Set<int> watchedEpisodes;
   final bool isLoading;
   final String? errorMessage;
   final ValueChanged<int> onSeasonChanged;
@@ -1878,9 +2224,8 @@ class _EpisodesSection extends StatelessWidget {
       );
     }
 
-    final seasons = details?.seasons
-            .where((season) => season.seasonNumber > 0)
-            .toList() ??
+    final seasons =
+        details?.seasons.where((season) => season.seasonNumber > 0).toList() ??
         const <_SeasonItemDetails>[];
 
     return Column(
@@ -1898,7 +2243,7 @@ class _EpisodesSection extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xB3FFFFFF),
               fontSize: 12,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1913,12 +2258,19 @@ class _EpisodesSection extends StatelessWidget {
             message: 'Nenhum episódio encontrado para esta temporada.',
           )
         else ...[
-          for (var index = 0; index < seasonDetails!.episodes.length; index++) ...[
+          for (
+            var index = 0;
+            index < seasonDetails!.episodes.length;
+            index++
+          ) ...[
             _EpisodeCard(
               item: seasonDetails!.episodes[index],
               isSelected:
                   seasonDetails!.episodes[index].episodeNumber ==
                   selectedEpisode,
+              isWatched: watchedEpisodes.contains(
+                seasonDetails!.episodes[index].episodeNumber,
+              ),
               onTap: () => onEpisodeSelected(
                 seasonDetails!.episodes[index].episodeNumber,
               ),
@@ -1992,11 +2344,13 @@ class _EpisodeCard extends StatelessWidget {
   const _EpisodeCard({
     required this.item,
     required this.isSelected,
+    required this.isWatched,
     required this.onTap,
   });
 
   final _EpisodeDetails item;
   final bool isSelected;
+  final bool isWatched;
   final VoidCallback onTap;
 
   @override
@@ -2039,10 +2393,46 @@ class _EpisodeCard extends StatelessWidget {
                         height: imageHeight,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: _EpisodeStillImage(
-                            imageUrl: item.stillUrl,
-                            width: imageWidth,
-                            height: imageHeight,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              _EpisodeStillImage(
+                                imageUrl: item.stillUrl,
+                                width: imageWidth,
+                                height: imageHeight,
+                              ),
+                              if (isWatched)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    height: 3 * scale,
+                                    color: const Color(0xFFE50914),
+                                  ),
+                                ),
+                              Positioned.fill(
+                                child: Center(
+                                  child: Container(
+                                    width: iconSize,
+                                    height: iconSize,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0x8A000000),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.play_arrow_rounded,
+                                      color: Colors.white,
+                                      size: iconSize * 0.6,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -2078,14 +2468,6 @@ class _EpisodeCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      SizedBox(width: 16 * scale),
-                      Icon(
-                        isSelected
-                            ? Icons.play_circle_fill_rounded
-                            : Icons.play_circle_outline_rounded,
-                        color: Colors.white,
-                        size: iconSize,
-                      ),
                     ],
                   ),
                 ),
@@ -2110,7 +2492,7 @@ class _EpisodeCard extends StatelessWidget {
                 style: const TextStyle(
                   color: Color(0x80FFFFFF),
                   fontSize: 11,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -2163,7 +2545,7 @@ class _EpisodesEmptyState extends StatelessWidget {
         style: const TextStyle(
           color: Color(0xB3FFFFFF),
           fontSize: 13,
-          fontFamily: 'Inter',
+          fontFamily: 'Netflix Sans',
           fontWeight: FontWeight.w500,
           height: 1.4,
         ),
@@ -2270,12 +2652,7 @@ class _CastCard extends StatelessWidget {
       width: 77,
       child: Column(
         children: [
-          ClipOval(
-            child: _CastAvatar(
-              imageUrl: item.imageUrl,
-              size: 60,
-            ),
-          ),
+          ClipOval(child: _CastAvatar(imageUrl: item.imageUrl, size: 60)),
           const SizedBox(height: 10),
           Text(
             item.name,
@@ -2285,7 +2662,7 @@ class _CastCard extends StatelessWidget {
             style: const TextStyle(
               color: Colors.white,
               fontSize: 12,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
               height: 1.50,
             ),
@@ -2298,7 +2675,7 @@ class _CastCard extends StatelessWidget {
             style: const TextStyle(
               color: Color(0xFF707070),
               fontSize: 12,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w500,
               height: 1.50,
             ),
@@ -2341,7 +2718,7 @@ class _WatchActionsRow extends StatelessWidget {
           children: [
             _WatchActionItem(
               key: const ValueKey('watch-my-list-action'),
-              label: 'My List',
+              label: 'Minha Lista',
               asset: 'assets/watch/actions/Icon-Add-2778-1427.svg',
               activeSvg: _myListAddedIconSvg,
               isActive: isInMyList,
@@ -2357,7 +2734,7 @@ class _WatchActionsRow extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             _WatchActionItem(
-              label: 'Share',
+              label: 'Compartilhar',
               asset: 'assets/watch/actions/Icon-Share-2778-1433.svg',
             ),
           ],
@@ -2462,7 +2839,7 @@ class _RatingBadgeLabel extends StatelessWidget {
       style: const TextStyle(
         color: Color(0xFF9E9E9E),
         fontSize: 9,
-        fontFamily: 'Inter',
+        fontFamily: 'Netflix Sans',
         fontWeight: FontWeight.w600,
         height: 12 / 9,
       ),
@@ -2521,16 +2898,25 @@ class _WatchActionItem extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 5),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w600,
-                height: 13 / 10,
+            SizedBox(
+              height: 13,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: Text(
+                  label,
+                  key: ValueKey(label),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontFamily: 'Netflix Sans',
+                    fontWeight: FontWeight.w600,
+                    height: 13 / 10,
+                  ),
+                ),
               ),
             ),
           ],
@@ -2599,13 +2985,11 @@ class _CastAvatar extends StatelessWidget {
 
 class _RelatedItemsSection extends StatelessWidget {
   const _RelatedItemsSection({
-    required this.title,
     required this.items,
     required this.emptyMessage,
     required this.onItemTap,
   });
 
-  final String title;
   final List<_RelatedWatchItem> items;
   final String emptyMessage;
   final ValueChanged<_RelatedWatchItem> onItemTap;
@@ -2616,33 +3000,18 @@ class _RelatedItemsSection extends StatelessWidget {
       return _EpisodesEmptyState(message: emptyMessage);
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w600,
-          ),
+    return SizedBox(
+      height: 242,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 14),
+        itemBuilder: (context, index) => _RelatedItemCard(
+          item: items[index],
+          onTap: () => onItemTap(items[index]),
         ),
-        const SizedBox(height: 14),
-        SizedBox(
-          height: 222,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: items.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 14),
-            itemBuilder: (context, index) => _RelatedItemCard(
-              item: items[index],
-              onTap: () => onItemTap(items[index]),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -2679,7 +3048,7 @@ class _RelatedItemCard extends StatelessWidget {
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 13,
-                fontFamily: 'Inter',
+                fontFamily: 'Netflix Sans',
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -2737,11 +3106,13 @@ class _WatchTabBar extends StatelessWidget {
   const _WatchTabBar({
     required this.controller,
     required this.selectedLabel,
+    required this.tabs,
     required this.onSelected,
   });
 
   final ScrollController controller;
   final String selectedLabel;
+  final List<({String label, double width})> tabs;
   final ValueChanged<String> onSelected;
 
   @override
@@ -2757,33 +3128,15 @@ class _WatchTabBar extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _WatchTabItem(
-              label: 'Episodes',
-              width: 75,
-              isActive: selectedLabel == 'Episodes',
-              onTap: () => onSelected('Episodes'),
-            ),
-            const SizedBox(width: 16),
-            _WatchTabItem(
-              label: 'Collection',
-              width: 86,
-              isActive: selectedLabel == 'Collection',
-              onTap: () => onSelected('Collection'),
-            ),
-            const SizedBox(width: 16),
-            _WatchTabItem(
-              label: 'More Like This',
-              width: 119,
-              isActive: selectedLabel == 'More Like This',
-              onTap: () => onSelected('More Like This'),
-            ),
-            const SizedBox(width: 16),
-            _WatchTabItem(
-              label: 'Top Cast',
-              width: 75,
-              isActive: selectedLabel == 'Top Cast',
-              onTap: () => onSelected('Top Cast'),
-            ),
+            for (var index = 0; index < tabs.length; index++) ...[
+              if (index > 0) const SizedBox(width: 16),
+              _WatchTabItem(
+                label: tabs[index].label,
+                width: tabs[index].width,
+                isActive: selectedLabel == tabs[index].label,
+                onTap: () => onSelected(tabs[index].label),
+              ),
+            ],
           ],
         ),
       ),
@@ -2890,17 +3243,17 @@ class _ReviewCard extends StatelessWidget {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 12,
-                        fontFamily: 'Inter',
+                        fontFamily: 'Netflix Sans',
                         fontWeight: FontWeight.w500,
                         height: 1.50,
                       ),
                     ),
                     Text(
-                      '2 Months ago',
+                      'Há 2 meses',
                       style: TextStyle(
                         color: WatchScreen._muted,
                         fontSize: 12,
-                        fontFamily: 'Inter',
+                        fontFamily: 'Netflix Sans',
                         fontWeight: FontWeight.w500,
                         height: 1.50,
                       ),
@@ -2922,11 +3275,11 @@ class _ReviewCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           const Text(
-            "I always trust the choices of the wonderful Anya Taylor-Joy, who amazes me every time. I think this is the first movie I've watched in the new year, and it was really great.",
+            "Sempre confio nas escolhas da maravilhosa Anya Taylor-Joy, que me surpreende toda vez. Acho que este é o primeiro filme que assisti no ano novo, e foi realmente ótimo.",
             style: TextStyle(
               color: Colors.white,
               fontSize: 14,
-              fontFamily: 'Inter',
+              fontFamily: 'Netflix Sans',
               fontWeight: FontWeight.w400,
               height: 1.57,
             ),
@@ -2945,7 +3298,7 @@ class _ReviewCard extends StatelessWidget {
                 style: TextStyle(
                   color: WatchScreen._muted,
                   fontSize: 12,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w500,
                   height: 1.50,
                 ),
@@ -2962,7 +3315,7 @@ class _ReviewCard extends StatelessWidget {
                 style: TextStyle(
                   color: WatchScreen._muted,
                   fontSize: 12,
-                  fontFamily: 'Inter',
+                  fontFamily: 'Netflix Sans',
                   fontWeight: FontWeight.w500,
                   height: 1.50,
                 ),
@@ -3027,11 +3380,11 @@ class _BottomActions extends StatelessWidget {
                 ),
                 child: const Center(
                   child: Text(
-                    'Buy',
+                    'Comprar',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 14,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 1.57,
                     ),
@@ -3058,7 +3411,7 @@ class _BottomActions extends StatelessWidget {
                     style: TextStyle(
                       color: WatchScreen._primary,
                       fontSize: 14,
-                      fontFamily: 'Inter',
+                      fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
                       height: 1.57,
                     ),
@@ -3073,4 +3426,3 @@ class _BottomActions extends StatelessWidget {
     );
   }
 }
-
