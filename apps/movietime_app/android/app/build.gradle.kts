@@ -44,7 +44,9 @@ android {
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            val hasReleaseKeystore = signingProperties.getProperty("storeFile")?.isNotBlank() == true
+                && file(signingProperties.getProperty("storeFile")!!).exists()
+            signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }
 }
