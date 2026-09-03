@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/avatar_state.dart';
 import '../widgets/intro_shared.dart';
 import 'recommendation.dart';
 import 'sign_in.dart';
@@ -103,7 +104,11 @@ class _SignUpEmailState extends State<SignUpEmail> {
     });
 
     try {
-      await _authService.signup(name: name, email: email, password: password);
+      final user = await _authService.signup(name: name, email: email, password: password);
+      AvatarState.instance.update(
+        avatarIndex: user.preferences?.avatarIndex ?? 0,
+        avatarUrl: user.avatarUrl,
+      );
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(

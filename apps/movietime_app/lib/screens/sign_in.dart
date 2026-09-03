@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/avatar_state.dart';
 import '../widgets/intro_shared.dart';
 import 'forgot_password.dart';
 import 'home.dart';
@@ -115,7 +116,12 @@ class _SignInState extends State<SignIn> {
     });
 
     try {
-      await _authService.login(email: email, password: password);
+      final user = await _authService.login(email: email, password: password);
+      // Cache imediato para o menu não piscar (vector -> local -> remoto)
+      AvatarState.instance.update(
+        avatarIndex: user.preferences?.avatarIndex ?? 0,
+        avatarUrl: user.avatarUrl,
+      );
       if (!mounted) return;
 
       Navigator.of(

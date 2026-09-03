@@ -11,12 +11,14 @@ class HomeBottomNav extends StatefulWidget {
     super.key,
     this.activeItem = HomeNavItemId.home,
     this.onHomeTap,
+    this.onTrendingTap,
     this.onMyListTap,
     this.onMyTimeTap,
   });
 
   final HomeNavItemId activeItem;
   final VoidCallback? onHomeTap;
+  final VoidCallback? onTrendingTap;
   final VoidCallback? onMyListTap;
   final VoidCallback? onMyTimeTap;
 
@@ -33,8 +35,27 @@ class _HomeBottomNavState extends State<HomeBottomNav> {
   void initState() {
     super.initState();
     _authService = AuthService();
+    // Inicializa síncrono com o cache em memória para não piscar
+    final cachedIndex = AvatarState.instance.avatarIndex;
+    final cachedUrl = AvatarState.instance.avatarUrl;
+    if (cachedIndex != null) {
+      _avatar = _BottomNavAvatar(avatarIndex: cachedIndex, avatarUrl: cachedUrl);
+    }
     _avatarFuture = _loadAvatar();
     AvatarState.instance.addListener(_onAvatarChanged);
+    // Hidrata do localStorage (primeira vez após restart) sem piscar mockado
+    AvatarState.instance.hydrate().then((_) {
+      if (!mounted) return;
+      final idx = AvatarState.instance.avatarIndex;
+      if (idx != null && _avatar == null) {
+        setState(() {
+          _avatar = _BottomNavAvatar(
+            avatarIndex: idx,
+            avatarUrl: AvatarState.instance.avatarUrl,
+          );
+        });
+      }
+    });
   }
 
   @override
@@ -56,14 +77,25 @@ class _HomeBottomNavState extends State<HomeBottomNav> {
   }
 
   Future<_BottomNavAvatar?> _loadAvatar() async {
+    // Se já temos avatar em memória (vindo do login/profile), não refaz rede
+    if (_avatar != null) return _avatar;
     try {
       final user = await _authService.profile();
-      return _BottomNavAvatar(
+      final loaded = _BottomNavAvatar(
         avatarIndex: user.preferences?.avatarIndex ?? 0,
         avatarUrl: user.avatarUrl,
       );
+      // Sincroniza cache global para próximas instâncias do menu
+      AvatarState.instance.update(
+        avatarIndex: loaded.avatarIndex,
+        avatarUrl: loaded.avatarUrl,
+      );
+      if (mounted) {
+        setState(() => _avatar = loaded);
+      }
+      return loaded;
     } catch (_) {
-      return null;
+      return _avatar;
     }
   }
 
@@ -89,6 +121,9 @@ class _HomeBottomNavState extends State<HomeBottomNav> {
                   icon: 'assets/home/vectors/vector-2705-1278.png',
                   label: 'Em Alta',
                   active: widget.activeItem == HomeNavItemId.trending,
+                  onTap: widget.activeItem == HomeNavItemId.trending
+                      ? null
+                      : widget.onTrendingTap,
                 ),
                 _NavItem(
                   icon: 'assets/home/vectors/vector-I2704-1244-1-1791.png',
@@ -101,13 +136,18 @@ class _HomeBottomNavState extends State<HomeBottomNav> {
                 FutureBuilder<_BottomNavAvatar?>(
                   future: _avatarFuture,
                   builder: (context, snapshot) {
+                    // Prioriza cache síncrono (_avatar) para evitar piscada
+                    // vector -> local -> remoto. Só usa snapshot quando
+                    // _avatar ainda é nulo.
+                    final effective = _avatar ?? snapshot.data;
+                    // Se ainda está carregando e já temos effective, não mostra loading
                     return _NavItem(
                       icon: 'assets/home/vectors/vector-2705-1282.png',
                       label: 'Minha Time',
                       active: widget.activeItem == HomeNavItemId.myTime,
                       tintIcon: false,
                       iconWidget: _MyTimeNavAvatar(
-                        data: _avatar ?? snapshot.data,
+                        data: effective,
                       ),
                       onTap: widget.activeItem == HomeNavItemId.myTime
                           ? null
