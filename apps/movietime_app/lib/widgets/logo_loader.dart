@@ -2,7 +2,6 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_shaders/flutter_shaders.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 /// Loader giratório com o logo MovieTime.
@@ -67,7 +66,6 @@ class _LogoLoaderState extends State<LogoLoader>
       vsync: this,
       duration: widget.duration,
     )..repeat();
-    ShaderBuilder.precacheShader(LogoLoader.shaderAsset);
   }
 
   @override
@@ -128,37 +126,29 @@ class _LogoLoaderState extends State<LogoLoader>
 
   @override
   Widget build(BuildContext context) {
-    final fallback = Center(
-      child: RotationTransition(
-        turns: _controller,
-        child: SvgPicture.asset(
-          LogoLoader.asset,
-          width: widget.logoSize,
-          height: widget.logoSize,
-        ),
-      ),
-    );
-
+    // Correção: rotação pura sem shader para não balançar.
+    // RotationTransition gira em torno do centro exato via transform,
+    // sem offset de amostragem do shader que causava wobble.
     return RepaintBoundary(
       child: SizedBox(
         width: widget.size,
         height: widget.size,
-        child: ShaderBuilder(
-          (context, shader, child) {
-            final image = _logoImage;
-            if (image == null) return child ?? const SizedBox.shrink();
-            return CustomPaint(
-              size: Size.square(widget.size),
-              painter: _RotationalBlurPainter(
-                shader: shader,
-                image: image,
-                state: this,
-                intensity: widget.intensity,
-              ),
-            );
-          },
-          assetKey: LogoLoader.shaderAsset,
-          child: fallback,
+        child: Center(
+          child: RotationTransition(
+            turns: _controller,
+            child: _logoImage == null
+                ? SvgPicture.asset(
+                    LogoLoader.asset,
+                    width: widget.logoSize,
+                    height: widget.logoSize,
+                  )
+                : RawImage(
+                    image: _logoImage,
+                    width: widget.logoSize,
+                    height: widget.logoSize,
+                    fit: BoxFit.contain,
+                  ),
+          ),
         ),
       ),
     );
@@ -171,6 +161,7 @@ class _LogoLoaderState extends State<LogoLoader>
   }
 }
 
+// ignore: unused_element — mantido caso queira reativar blur rotacional sem wobble
 class _RotationalBlurPainter extends CustomPainter {
   _RotationalBlurPainter({
     required this.shader,
