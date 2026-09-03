@@ -3000,16 +3000,31 @@ class _RelatedItemsSection extends StatelessWidget {
       return _EpisodesEmptyState(message: emptyMessage);
     }
 
+    // Igual aos carrosséis da Home: vai até a lateral da tela,
+    // quebrando o padding 24 do SingleChildScrollView pai.
+    final screenWidth = MediaQuery.sizeOf(context).width;
     return SizedBox(
       height: 242,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 14),
-        itemBuilder: (context, index) => _RelatedItemCard(
-          item: items[index],
-          onTap: () => onItemTap(items[index]),
+      child: OverflowBox(
+        alignment: Alignment.center,
+        minWidth: screenWidth,
+        maxWidth: screenWidth,
+        minHeight: 242,
+        maxHeight: 242,
+        child: SizedBox(
+          width: screenWidth,
+          height: 242,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            itemCount: items.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 14),
+            itemBuilder: (context, index) => _RelatedItemCard(
+              item: items[index],
+              onTap: () => onItemTap(items[index]),
+            ),
+          ),
         ),
       ),
     );
@@ -3336,19 +3351,21 @@ class _BottomActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0x000D0D0D),
-            Color(0x260D0D0D),
-            Color(0xCC0D0D0D),
-            WatchScreen._bg,
-          ],
-          stops: [0.0, 0.42, 0.78, 1.0],
-        ),
-      ),
+      // GRADIENTE INFERIOR DESATIVADO — descomentar para reativar:
+      // decoration: const BoxDecoration(
+      //   gradient: LinearGradient(
+      //     begin: Alignment.topCenter,
+      //     end: Alignment.bottomCenter,
+      //     colors: [
+      //       Color(0x000D0D0D),
+      //       Color(0x260D0D0D),
+      //       Color(0xCC0D0D0D),
+      //       WatchScreen._bg,
+      //     ],
+      //     stops: [0.0, 0.42, 0.78, 1.0],
+      //   ),
+      // ),
+      decoration: const BoxDecoration(),
       child: SizedBox(height: bottomPadding + 110),
       /*
       Botoes inferiores Buy / Trailer desativados temporariamente.

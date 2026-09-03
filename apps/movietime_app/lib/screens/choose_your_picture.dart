@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import '../services/avatar_catalog.dart';
 import '../widgets/local_avatar_image.dart';
 import '../widgets/intro_shared.dart';
-import 'choose_your_plan.dart';
+import 'highlights.dart';
+// PLAN DESATIVADO TEMPORARIAMENTE — lógica mantida intacta:
+// import 'choose_your_plan.dart';
 
 /// Tela "Control_Profile" do Figma (390×844).
 ///
@@ -27,12 +29,36 @@ class _ControlProfileState extends State<ControlProfile> {
   int _selectedThumb = 0;
   bool _showAllAvatars = false;
 
+  // PLAN DESATIVADO: fluxo pula direto para Highlights
+  // sem exigir cupom WESKER. Para reativar, descomente o import de
+  // choose_your_plan.dart acima e troque o destino de volta para ControlPlan.
   void _goToPlan() {
     Navigator.of(context).push(
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 450),
         reverseTransitionDuration: const Duration(milliseconds: 450),
-        pageBuilder: (_, _, _) => const ControlPlan(),
+        pageBuilder: (_, _, _) => const Highlights(),
+        transitionsBuilder: (_, animation, secondaryAnimation, child) {
+          return SharedAxisTransition(
+            animation: animation,
+            secondaryAnimation: secondaryAnimation,
+            transitionType: SharedAxisTransitionType.vertical,
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+
+  // ignore: unused_element — mantido para reativar plano sem perder lógica
+  void _goToPlanOriginal() {
+    // ignore: dead_code
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 450),
+        reverseTransitionDuration: const Duration(milliseconds: 450),
+        pageBuilder: (_, _, _) => const Highlights(),
+        // Para reativar: trocar por const ControlPlan()
         transitionsBuilder: (_, animation, secondaryAnimation, child) {
           return SharedAxisTransition(
             animation: animation,
