@@ -49,6 +49,41 @@ class SessionStore {
     return _storage.read(key: _accessTokenKey);
   }
 
+  Future<String?> refreshToken() {
+    return _storage.read(key: _refreshTokenKey);
+  }
+
+  Future<int?> expiresAt() async {
+    final raw = await _storage.read(key: _expiresAtKey);
+    if (raw == null) return null;
+    return int.tryParse(raw);
+  }
+
+  Future<AuthSession?> getSession() async {
+    final token = await _storage.read(key: _accessTokenKey);
+    if (token == null || token.isEmpty) return null;
+    final refresh = await _storage.read(key: _refreshTokenKey);
+    final expRaw = await _storage.read(key: _expiresAtKey);
+    return AuthSession(
+      accessToken: token,
+      refreshToken: refresh ?? '',
+      expiresAt: expRaw == null ? null : int.tryParse(expRaw),
+    );
+  }
+
+  Future<bool> hasSession() async {
+    final token = await _storage.read(key: _accessTokenKey);
+    return token != null && token.isNotEmpty;
+  }
+
+  bool isExpired(AuthSession session) {
+    final exp = session.expiresAt;
+    if (exp == null) return false;
+    // expiresAt pode vir em segundos ou milissegundos – normaliza.
+    final expMs = exp > 4102444800 ? exp : exp * 1000;
+    return DateTime.now().millisecondsSinceEpoch >= expMs;
+  }
+
   Future<void> clear() async {
     await _storage.delete(key: _accessTokenKey);
     await _storage.delete(key: _refreshTokenKey);

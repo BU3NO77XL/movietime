@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/auth_service.dart';
 import '../widgets/intro_shared.dart';
+import 'home.dart';
+import 'screen_transitions.dart';
 import 'watch_now_or_signup.dart';
 
 /// Tela de loading inicial: mostra o fundo aurora pulsando com o logo,
@@ -17,6 +20,7 @@ class Intro extends StatefulWidget {
 
 class _IntroState extends State<Intro> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -38,10 +42,42 @@ class _IntroState extends State<Intro> with SingleTickerProviderStateMixin {
     _scheduleNavigation();
   }
 
-  void _scheduleNavigation() {
-    Future.delayed(widget.loadingDuration, () {
-      if (!mounted) return;
-      debugPrint('Intro: navegando para Intro2 após ${widget.loadingDuration}');
+  Future<void> _scheduleNavigation() async {
+    // Mantém splash por no mínimo [loadingDuration] e em paralelo
+    // verifica se já existe sessão válidaPersistida.
+    final sessionFuture = _authService.isLoggedIn();
+    final delayFuture = Future.delayed(widget.loadingDuration);
+
+    bool isLoggedIn = false;
+    try {
+      // Aguarda ambos (delay + validação). Timeout de 4s na validação
+      // para não prender splash se rede estiver lenta.
+      final results = await Future.wait([
+        sessionFuture.timeout(
+          const Duration(seconds: 4),
+          onTimeout: () async {
+            // fallback otimista: se timeout mas há token local, mantém logado
+            try {
+              return await _authService.hasValidLocalSession();
+            } catch (_) {
+              return false;
+            }
+          },
+        ),
+        delayFuture,
+      ]);
+      isLoggedIn = results[0] as bool;
+    } catch (_) {
+      isLoggedIn = false;
+    }
+
+    if (!mounted) return;
+
+    if (isLoggedIn) {
+      debugPrint('Intro: sessão válida encontrada -> navegando para Home');
+      Navigator.of(context).pushReplacement(cinematicPageRoute(const Home()));
+    } else {
+      debugPrint('Intro: sem sessão -> navegando para Intro2 após ${widget.loadingDuration}');
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
           pageBuilder: (_, animation, secondaryAnimation) => const Intro2(),
@@ -52,12 +88,13 @@ class _IntroState extends State<Intro> with SingleTickerProviderStateMixin {
           transitionDuration: const Duration(milliseconds: 600),
         ),
       );
-    });
+    }
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _authService.close();
 
     // Libera a rotação de volta ao normal ao sair desta tela.
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
