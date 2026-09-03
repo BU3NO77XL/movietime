@@ -205,12 +205,9 @@ class _HomeSearchScreenState extends State<HomeSearchScreen> {
       mediaTypes.map((mediaType) async {
         final query = <String, String>{'language': 'pt-BR', 'page': '$page'};
         String path;
-        if (!useDiscover && mediaTypes.length == 1) {
+        if (!useDiscover) {
+          // Mantém paginação funcionando também no estado padrão (trending)
           path = 'trending/$mediaType/week';
-          query.remove('page');
-        } else if (!useDiscover && mediaTypes.length == 2) {
-          path = 'trending/$mediaType/week';
-          query.remove('page');
         } else {
           path = 'discover/$mediaType';
           query['sort_by'] = switch (_selectedSort) {
@@ -823,15 +820,16 @@ class _SearchLoadMore extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 26, bottom: 8),
+    return Padding(
+      padding: const EdgeInsets.only(top: 26, bottom: 8),
+      child: Center(
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: loading ? null : onTap,
           child: Container(
             height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            alignment: Alignment.center,
             decoration: ShapeDecoration(
               color: HomeSearchScreen.card,
               shape: RoundedRectangleBorder(
@@ -842,20 +840,21 @@ class _SearchLoadMore extends StatelessWidget {
             child: loading
                 ? const SizedBox(
                     width: 18,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white70,
-                      ),
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white70,
                     ),
                   )
                 : const Text(
                     'Ver mais',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 13,
                       fontFamily: 'Netflix Sans',
                       fontWeight: FontWeight.w500,
+                      height: 1,
                     ),
                   ),
           ),
