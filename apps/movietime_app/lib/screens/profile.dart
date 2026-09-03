@@ -11,9 +11,11 @@ import '../widgets/authenticated_avatar_image.dart';
 import '../widgets/home_bottom_nav.dart';
 import 'admin_access.dart';
 import 'home.dart';
+import 'movie_time.dart';
 import 'mylist.dart';
 import 'screen_transitions.dart';
 import 'setting.dart';
+import 'trending.dart';
 
 const _bg = Color(0xFF0D0D0D);
 const _card = Color(0xFF1A1A1A);
@@ -152,6 +154,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
+  bool _isLoggingOut = false;
+
+  Future<void> _handleLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: const Text('Sair da conta?', style: TextStyle(color: Colors.white)),
+        content: const Text('Sua sessão será encerrada neste dispositivo.',
+            style: TextStyle(color: Color(0xFF9E9E9E))),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFFFF4C61)),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sair'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _isLoggingOut = true);
+    try {
+      await _authService.logout();
+    } catch (_) {
+      // mesmo se falhar no servidor, limpa local e desloga
+    }
+    await AvatarState.instance.clearPersisted();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      cinematicPageRoute(const Intro()),
+      (_) => false,
+    );
+  }
+
   Future<void> _loadProfile({bool refresh = false}) async {
     if (refresh) {
       setState(() {
@@ -247,6 +287,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             context,
           ).pushReplacement(cinematicPageRoute(const Home()));
         },
+        onTrendingTap: () {
+          Navigator.of(
+            context,
+          ).pushReplacement(cinematicPageRoute(const TrendingScreen()));
+        },
         onMyListTap: () {
           Navigator.of(
             context,
@@ -327,6 +372,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         fontWeight: FontWeight.w400,
                         height: 1.45,
                       ),
+                    ),
+                    const SizedBox(height: 28),
+                    _LogoutButton(
+                      isLoading: _isLoggingOut,
+                      onTap: _handleLogout,
                     ),
                   ],
                 ),
@@ -941,6 +991,56 @@ class _SupportRow extends StatelessWidget {
             size: 30,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LogoutButton extends StatelessWidget {
+  const _LogoutButton({required this.isLoading, required this.onTap});
+
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: isLoading ? null : onTap,
+      child: Opacity(
+        opacity: isLoading ? 0.6 : 1,
+        child: Container(
+          width: double.infinity,
+          height: 52,
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFFF4C61), width: 1.5),
+          ),
+          alignment: Alignment.center,
+          child: isLoading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF4C61)),
+                )
+              : const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.logout_rounded, color: Color(0xFFFF4C61), size: 18),
+                    SizedBox(width: 8),
+                    Text(
+                      'Sair',
+                      style: TextStyle(
+                        color: Color(0xFFFF4C61),
+                        fontSize: 14,
+                        fontFamily: 'Netflix Sans',
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }
