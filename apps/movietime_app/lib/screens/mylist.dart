@@ -7,13 +7,17 @@ import '../services/auth_models.dart';
 import '../services/auth_service.dart';
 import '../services/content_models.dart';
 import '../services/content_service.dart';
+import '../widgets/home_bottom_nav.dart';
 import '../widgets/logo_loader.dart';
 import 'create_list_modal.dart';
+import 'home.dart';
 import 'profile.dart';
+import 'trending.dart';
 import 'screen_transitions.dart';
 import 'see_all_mylist.dart';
 import 'watch.dart';
-import 'watch_series_mylist.dart';
+// PÁGINA SÉRIE PERSONALIZADA DESATIVADA — lógica mantida comentada:
+// import 'watch_series_mylist.dart';
 
 class MyListScreen extends StatefulWidget {
   const MyListScreen({super.key, this.authService, this.contentService});
@@ -141,14 +145,17 @@ class _MyListScreenState extends State<MyListScreen> {
     }
   }
 
+  // PÁGINA SÉRIE PERSONALIZADA DESATIVADA — todas vão para WatchScreen
+  // Para reativar: descomentar import watch_series_mylist.dart acima
+  // e descomentar o bloco isSeries abaixo.
   Widget _watchRoute(WatchlistItem item) {
-    final isSeries = item.mediaType == 'tv' || item.mediaType == 'series';
-    if (isSeries) {
-      return WatchSeriesMyListScreen(
-        item: item,
-        history: item is WatchHistoryItem ? item : null,
-      );
-    }
+    // final isSeries = item.mediaType == 'tv' || item.mediaType == 'series';
+    // if (isSeries) {
+    //   return WatchSeriesMyListScreen(
+    //     item: item,
+    //     history: item is WatchHistoryItem ? item : null,
+    //   );
+    // }
     return WatchScreen.fromWatchlist(item);
   }
 
@@ -187,7 +194,18 @@ class _MyListScreenState extends State<MyListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: MyListScreen._bg,
-      bottomNavigationBar: const _MyListBottomNav(),
+      bottomNavigationBar: HomeBottomNav(
+        activeItem: HomeNavItemId.myList,
+        onHomeTap: () => Navigator.of(context).pushReplacement(
+          cinematicPageRoute(const Home()),
+        ),
+        onTrendingTap: () => Navigator.of(context).pushReplacement(
+          cinematicPageRoute(const TrendingScreen()),
+        ),
+        onMyTimeTap: () => Navigator.of(context).pushReplacement(
+          cinematicPageRoute(const ProfileScreen()),
+        ),
+      ),
       body: SafeArea(
         child: Stack(
           children: [
@@ -757,6 +775,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
+// ignore: unused_element — substituída por HomeBottomNav para manter avatar
 class _MyListBottomNav extends StatelessWidget {
   const _MyListBottomNav();
 
