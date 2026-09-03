@@ -13,6 +13,7 @@ import 'home_search.dart';
 import 'mylist.dart';
 import 'profile.dart';
 import 'screen_transitions.dart';
+import 'trending.dart';
 import 'watch.dart';
 
 class Home extends StatefulWidget {
@@ -22,7 +23,7 @@ class Home extends StatefulWidget {
   State<Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<Home> {
+class _HomeState extends State<Home> with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   final ContentService _contentService = ContentService();
 
@@ -30,19 +31,34 @@ class _HomeState extends State<Home> {
   List<_HomeHeroItem> _heroItems = const [];
   int _heroIndex = 0;
   Timer? _heroRotationTimer;
+  Timer? _continuePollingTimer;
   List<_HomePosterItem> _continueWatching = const [];
   List<_HomePosterItem> _trendingItems = const [];
   List<_HomePosterItem> _topTenItems = const [];
+  List<_HomePosterItem> _actionItems = const [];
+  List<_HomePosterItem> _comedyItems = const [];
+  List<_HomePosterItem> _popularItems = const [];
+  List<_HomePosterItem> _netflixSeriesItems = const [];
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadHome();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshContinueWatching();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _heroRotationTimer?.cancel();
+    _continuePollingTimer?.cancel();
     _authService.close();
     _contentService.close();
     super.dispose();
@@ -65,6 +81,32 @@ class _HomeState extends State<Home> {
           'movie/top_rated',
           query: const {'language': 'pt-BR', 'page': '1'},
         ),
+        _contentService.tmdb(
+          'discover/movie',
+          query: const {
+            'language': 'pt-BR',
+            'with_genres': '28',
+            'sort_by': 'popularity.desc',
+            'page': '1',
+          },
+        ),
+        _contentService.tmdb(
+          'discover/movie',
+          query: const {
+            'language': 'pt-BR',
+            'with_genres': '35',
+            'sort_by': 'popularity.desc',
+            'page': '1',
+          },
+        ),
+        _contentService.tmdb(
+          'movie/popular',
+          query: const {'language': 'pt-BR', 'page': '1'},
+        ),
+        _contentService.tmdb(
+          'tv/popular',
+          query: const {'language': 'pt-BR', 'page': '1'},
+        ),
       ]);
 
       final trendingMovies = _parseHomeItems(
@@ -75,8 +117,23 @@ class _HomeState extends State<Home> {
         responses[1],
         fallbackMediaType: 'movie',
       );
+      final actionMovies = _parseHomeItems(
+        responses[2],
+        fallbackMediaType: 'movie',
+      );
+      final comedyMovies = _parseHomeItems(
+        responses[3],
+        fallbackMediaType: 'movie',
+      );
+      final popularMovies = _parseHomeItems(
+        responses[4],
+        fallbackMediaType: 'movie',
+      );
+      final popularSeries = _parseHomeItems(
+        responses[5],
+        fallbackMediaType: 'tv',
+      );
       final heroItems = await _buildHeroItems(trendingMovies.take(6).toList());
-      await _precacheHeroAssets(heroItems.isEmpty ? null : heroItems.first);
 
       var continueWatching = <_HomePosterItem>[];
       try {
@@ -86,19 +143,74 @@ class _HomeState extends State<Home> {
       } catch (_) {}
 
       if (!mounted) return;
+      // Yield para o ticker do loader girar sem travar no frame do setState
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted) return;
       setState(() {
         _heroItems = heroItems;
         _heroIndex = 0;
         _continueWatching = continueWatching;
         _trendingItems = trendingMovies.take(12).toList();
         _topTenItems = topRatedMovies.take(10).toList();
+        _actionItems = actionMovies.take(12).toList();
+        _comedyItems = comedyMovies.take(12).toList();
+        _popularItems = popularMovies.take(12).toList();
+        _netflixSeriesItems = popularSeries.take(12).toList();
         _isLoading = false;
       });
       _restartHeroRotation();
+      // Precache em background sem travar o loader — não bloqueia o giro
+      if (heroItems.isNotEmpty) {
+        final first = heroItems.first;
+        // ignore: discarded_futures
+        Future.microtask(() => _precacheHeroAssets(first));
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _isLoading = false);
     }
+    _startContinuePolling();
+  }
+
+  void _startContinuePolling() {
+    _continuePollingTimer?.cancel();
+    // Polling a cada 10s para refletir S:E/Ep. sem refresh manual
+    _continuePollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted || _isLoading) return;
+      _refreshContinueWatching();
+    });
+  }
+
+  Future<void> _refreshContinueWatching() async {
+    try {
+      final user = await _authService.profile();
+      final history = await _contentService.watchHistory(user.id);
+      final updated = await _buildContinueWatchingItems(history);
+      if (!mounted) return;
+      final changed = updated.length != _continueWatching.length ||
+          !_listEquals(updated, _continueWatching);
+      if (changed) {
+        setState(() => _continueWatching = updated);
+      }
+    } catch (_) {}
+  }
+
+  bool _listEquals(List<_HomePosterItem> a, List<_HomePosterItem> b) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      final x = a[i];
+      final y = b[i];
+      if (x.tmdbId != y.tmdbId ||
+          x.seasonNumber != y.seasonNumber ||
+          x.episodeNumber != y.episodeNumber ||
+          x.progressPercent != y.progressPercent ||
+          x.totalEpisodes != y.totalEpisodes) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _precacheHeroAssets(_HomeHeroItem? item) async {
@@ -296,8 +408,8 @@ class _HomeState extends State<Home> {
     });
   }
 
-  void _openWatch(_HomePosterItem item) {
-    Navigator.of(context).push(
+  Future<void> _openWatch(_HomePosterItem item) async {
+    await Navigator.of(context).push(
       cinematicPageRoute(
         WatchScreen(
           tmdbId: item.tmdbId,
@@ -313,6 +425,9 @@ class _HomeState extends State<Home> {
         ),
       ),
     );
+    if (!mounted) return;
+    // Ao voltar do player, atualiza imediatamente S:E sem esperar polling
+    _refreshContinueWatching();
   }
 
   @override
@@ -320,6 +435,9 @@ class _HomeState extends State<Home> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
       bottomNavigationBar: HomeBottomNav(
+        onTrendingTap: () {
+          Navigator.of(context).push(cinematicPageRoute(const TrendingScreen()));
+        },
         onMyListTap: () {
           Navigator.of(context).push(cinematicPageRoute(const MyListScreen()));
         },
@@ -402,7 +520,7 @@ class _HomeState extends State<Home> {
                             Padding(
                               padding: const EdgeInsets.fromLTRB(
                                 21,
-                                58,
+                                28,
                                 16,
                                 12,
                               ),
@@ -569,6 +687,42 @@ class _HomeState extends State<Home> {
                                   'Não foi possível carregar o Top 10 agora.',
                               onTap: _openWatch,
                               showRanking: true,
+                            ),
+                            const SizedBox(height: 24),
+                            const _SectionTitle(title: 'Ação em alta'),
+                            const SizedBox(height: 12),
+                            _PosterRow(
+                              items: _actionItems,
+                              loading: _isLoading,
+                              emptyMessage: 'Não foi possível carregar ação agora.',
+                              onTap: _openWatch,
+                            ),
+                            const SizedBox(height: 24),
+                            const _SectionTitle(title: 'Comédias para rir'),
+                            const SizedBox(height: 12),
+                            _PosterRow(
+                              items: _comedyItems,
+                              loading: _isLoading,
+                              emptyMessage: 'Não foi possível carregar comédias agora.',
+                              onTap: _openWatch,
+                            ),
+                            const SizedBox(height: 24),
+                            const _SectionTitle(title: 'Populares no MovieTime'),
+                            const SizedBox(height: 12),
+                            _PosterRow(
+                              items: _popularItems,
+                              loading: _isLoading,
+                              emptyMessage: 'Não foi possível carregar populares agora.',
+                              onTap: _openWatch,
+                            ),
+                            const SizedBox(height: 24),
+                            const _SectionTitle(title: 'Séries em alta'),
+                            const SizedBox(height: 12),
+                            _PosterRow(
+                              items: _netflixSeriesItems,
+                              loading: _isLoading,
+                              emptyMessage: 'Não foi possível carregar séries agora.',
+                              onTap: _openWatch,
                             ),
                             const SizedBox(height: 24),
                           ],
@@ -1220,18 +1374,9 @@ class _PosterRow extends StatelessWidget {
                               ),
                             if (showRanking)
                               Positioned(
-                                left: -4,
-                                bottom: -8,
-                                child: Text(
-                                  '${index + 1}',
-                                  style: TextStyle(
-                                    color: Colors.white.withValues(alpha: 0.18),
-                                    fontSize: 72,
-                                    fontFamily: 'Netflix Sans',
-                                    fontWeight: FontWeight.w700,
-                                    height: 1,
-                                  ),
-                                ),
+                                left: -6,
+                                bottom: -10,
+                                child: _Top10Number(number: index + 1),
                               ),
                           ],
                         ),
@@ -1242,28 +1387,56 @@ class _PosterRow extends StatelessWidget {
                               left: 2,
                               right: 2,
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    [
-                                      if (item.year != null) '${item.year}',
-                                      if (_hasEpisodeProgress(item))
-                                        'S${item.seasonNumber}:E${item.episodeNumber}',
-                                    ].join('  '),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xFF9E9E9E),
-                                      fontSize: 11,
-                                      fontFamily: 'Netflix Sans',
+                            child: Builder(
+                              builder: (context) {
+                                final isSeries = item.mediaType == 'tv';
+                                final showSeason = _hasEpisodeProgress(item);
+                                // No Continuar assistindo: série mostra só S:E verde + Ep., sem ano
+                                final showYear = item.year != null && !(isSeries && showSeason);
+                                return Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Expanded(
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (showYear)
+                                            Text(
+                                              '${item.year}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Color(0xFF9E9E9E),
+                                                fontSize: 11,
+                                                fontFamily: 'Netflix Sans',
+                                              ),
+                                            ),
+                                          if (showYear && showSeason)
+                                            const SizedBox(width: 6),
+                                          if (showSeason)
+                                            Flexible(
+                                              child: Text(
+                                                'S${item.seasonNumber}:E${item.episodeNumber}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Color(0xFF46D369),
+                                                  fontSize: 11,
+                                                  fontFamily: 'Netflix Sans',
+                                                  fontWeight: FontWeight.w700,
+                                                  letterSpacing: 0.3,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                _historyStatus(item),
-                              ],
+                                    const SizedBox(width: 6),
+                                    _historyStatus(item),
+                                  ],
+                                );
+                              },
                             ),
                           ),
                       ],
@@ -1333,6 +1506,46 @@ class _ContinueProgressBar extends StatelessWidget {
   }
 }
 
+class _Top10Number extends StatelessWidget {
+  const _Top10Number({required this.number});
+
+  final int number;
+
+  @override
+  Widget build(BuildContext context) {
+    // Netflix-style: fill cinza escuro + contorno branco
+    return Stack(
+      children: [
+        // Contorno branco (stroke)
+        Text(
+          '$number',
+          style: TextStyle(
+            fontSize: 84,
+            fontFamily: 'Netflix Sans',
+            fontWeight: FontWeight.w900,
+            height: 1,
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3
+              ..color = Colors.white,
+          ),
+        ),
+        // Preenchimento cinza escuro
+        Text(
+          '$number',
+          style: const TextStyle(
+            fontSize: 84,
+            fontFamily: 'Netflix Sans',
+            fontWeight: FontWeight.w900,
+            height: 1,
+            color: Color(0xFF1A1A1A),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 bool _hasEpisodeProgress(_HomePosterItem item) {
   return item.seasonNumber > 0 && item.episodeNumber > 0;
 }
@@ -1381,7 +1594,7 @@ Widget _historyStatus(_HomePosterItem item) {
         'Completo',
         style: TextStyle(
           color: Color(0xFF46D369),
-          fontSize: 9,
+          fontSize: 10,
           fontFamily: 'Netflix Sans',
           fontWeight: FontWeight.w700,
         ),
@@ -1394,7 +1607,18 @@ Widget _historyStatus(_HomePosterItem item) {
       'Ep. $cumulative/${item.totalEpisodes}',
       style: const TextStyle(
         color: Color(0xFF9E9E9E),
-        fontSize: 9,
+        fontSize: 10,
+        fontFamily: 'Netflix Sans',
+      ),
+    );
+  }
+  // Fallback igual web: quando não tem totalEpisodes mas tem totalSeasons
+  if (item.totalSeasons > 0) {
+    return Text(
+      'T${item.seasonNumber}/${item.totalSeasons}',
+      style: const TextStyle(
+        color: Color(0xFF9E9E9E),
+        fontSize: 10,
         fontFamily: 'Netflix Sans',
       ),
     );
