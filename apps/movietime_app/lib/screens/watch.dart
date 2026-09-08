@@ -713,46 +713,107 @@ class _WatchScreenState extends State<WatchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    height: MediaQuery.paddingOf(context).top + 450,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned(
-                          left: 0,
-                          top: MediaQuery.paddingOf(context).top + 58,
-                          child: _BackButton(
-                            onTap: () => Navigator.of(context).pop(),
-                          ),
-                        ),
-                        Positioned(
-                          right: 0,
-                          top: MediaQuery.paddingOf(context).top + 58,
-                          child: _HeroActionButtons(
-                            isSaved: _isSaved || _isInMyList,
-                            onSaveTap: _toggleMyList,
-                          ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          top: MediaQuery.paddingOf(context).top + 95,
-                          child: Center(
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(20),
-                              child: Hero(
-                                tag: _watchPosterHeroTag,
-                                child: _WatchHeroImage(
-                                  imageUrl: _displayPosterUrl,
-                                  width: 230,
-                                  height: 355,
+                  Builder(
+                    builder: (context) {
+                      final screenWidth = MediaQuery.sizeOf(context).width;
+                      final heroHeight =
+                          MediaQuery.paddingOf(context).top + 380;
+                      return SizedBox(
+                        height: heroHeight,
+                        child: OverflowBox(
+                          alignment: Alignment.topCenter,
+                          minWidth: screenWidth,
+                          maxWidth: screenWidth,
+                          minHeight: heroHeight,
+                          maxHeight: heroHeight,
+                          child: SizedBox(
+                            width: screenWidth,
+                            height: heroHeight,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Positioned.fill(
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      Hero(
+                                        tag: _watchPosterHeroTag,
+                                        child: _WatchHeroImage(
+                                          imageUrl: _displayBackdropUrl,
+                                          width: double.infinity,
+                                          height: double.infinity,
+                                        ),
+                                      ),
+                                      DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Colors.black
+                                                  .withValues(alpha: 0.10),
+                                              Colors.black
+                                                  .withValues(alpha: 0.00),
+                                              Colors.black
+                                                  .withValues(alpha: 0.35),
+                                              WatchScreen._bg,
+                                            ],
+                                            stops: const [
+                                              0.0,
+                                              0.45,
+                                              0.72,
+                                              1.0,
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.centerLeft,
+                                            end: Alignment.centerRight,
+                                            colors: [
+                                              Colors.black
+                                                  .withValues(alpha: 0.18),
+                                              Colors.transparent,
+                                              Colors.transparent,
+                                              Colors.black
+                                                  .withValues(alpha: 0.18),
+                                            ],
+                                            stops: const [
+                                              0.0,
+                                              0.25,
+                                              0.75,
+                                              1.0,
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
+                                Positioned(
+                                  left: 24,
+                                  top: MediaQuery.paddingOf(context).top + 12,
+                                  child: _BackButton(
+                                    onTap: () =>
+                                        Navigator.of(context).pop(),
+                                  ),
+                                ),
+                                Positioned(
+                                  right: 24,
+                                  top: MediaQuery.paddingOf(context).top + 12,
+                                  child: _HeroActionButtons(
+                                    isSaved: _isSaved || _isInMyList,
+                                    onSaveTap: _toggleMyList,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 28),
                   /*
