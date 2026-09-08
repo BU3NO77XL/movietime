@@ -112,21 +112,21 @@ class _WatchScreenState extends State<WatchScreen> {
   List<({String label, double width})> get _availableWatchTabs {
     if (_isSeries) {
       return const [
-        (label: 'Episódios', width: 88),
-        (label: 'Mais como este', width: 128),
-        (label: 'Elenco principal', width: 150),
+        (label: 'Episódios', width: 92),
+        (label: 'Mais como este', width: 148),
+        (label: 'Elenco principal', width: 162),
       ];
     }
     if (!_hasCollection) {
       return const [
-        (label: 'Mais como este', width: 128),
-        (label: 'Elenco principal', width: 150),
+        (label: 'Mais como este', width: 148),
+        (label: 'Elenco principal', width: 162),
       ];
     }
     return const [
-      (label: 'Coleção', width: 74),
-      (label: 'Mais como este', width: 128),
-      (label: 'Elenco principal', width: 150),
+      (label: 'Coleção', width: 80),
+      (label: 'Mais como este', width: 148),
+      (label: 'Elenco principal', width: 162),
     ];
   }
 
@@ -3276,7 +3276,12 @@ class _WatchTabItem extends StatelessWidget {
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
                 letterSpacing: 0.17,
               ),
-              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+              // Nunca abrevia: reduz escala em telas estreitas em vez de "..."
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(label, maxLines: 1, softWrap: false),
+              ),
             ),
           ],
         ),
