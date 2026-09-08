@@ -693,26 +693,30 @@ class _WatchScreenState extends State<WatchScreen> {
             // Fundo com imagem blur desativado.
             // Para reativar, descomente a linha abaixo:
             // _HeroBlurBackground(imageUrl: _displayBackdropUrl),
-            Positioned(
-              right: -175,
-              top: -144,
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                child: Container(
-                  width: 350,
-                  height: 350,
-                  decoration: const ShapeDecoration(
-                    color: WatchScreen._border,
-                    shape: OvalBorder(),
-                  ),
-                ),
-              ),
-            ),
             SingleChildScrollView(
               controller: _pageScrollController,
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 76),
-              child: Column(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Brilho no canto superior direito - rola com a página
+                  Positioned(
+                    right: -199,
+                    top: -144,
+                    child: ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
+                      child: Container(
+                        width: 350,
+                        height: 350,
+                        decoration: const ShapeDecoration(
+                          color: WatchScreen._border,
+                          shape: OvalBorder(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Builder(
@@ -962,6 +966,8 @@ class _WatchScreenState extends State<WatchScreen> {
                     starPrefix: 'vector-I62-2690',
                   ),
                   */
+                ],
+              ),
                 ],
               ),
             ),

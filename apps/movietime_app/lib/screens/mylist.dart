@@ -209,21 +209,6 @@ class _MyListScreenState extends State<MyListScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            Positioned(
-              right: -175,
-              top: -144,
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 300, sigmaY: 300),
-                child: Container(
-                  width: 350,
-                  height: 350,
-                  decoration: const ShapeDecoration(
-                    color: Color(0xFF2C2C2C),
-                    shape: OvalBorder(),
-                  ),
-                ),
-              ),
-            ),
             if (_isLoading)
               const Center(child: LogoLoader())
             else
@@ -237,9 +222,31 @@ class _MyListScreenState extends State<MyListScreen> {
                   ),
                   padding: const EdgeInsets.fromLTRB(0, 42, 0, 36),
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Row(
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        // Brilho no canto superior direito - rola com a página
+                        Positioned(
+                          right: -175,
+                          top: -186,
+                          child: ImageFiltered(
+                            imageFilter: ImageFilter.blur(
+                              sigmaX: 300,
+                              sigmaY: 300,
+                            ),
+                            child: Container(
+                              width: 350,
+                              height: 350,
+                              decoration: const ShapeDecoration(
+                                color: Color(0xFF2C2C2C),
+                                shape: OvalBorder(),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Row(
                         children: [
                           Expanded(
                             child: Text(
@@ -274,6 +281,8 @@ class _MyListScreenState extends State<MyListScreen> {
                           ),
                         ],
                       ),
+                    ),
+                      ],
                     ),
                     const SizedBox(height: 24),
                     _FeaturedSeriesSection(
