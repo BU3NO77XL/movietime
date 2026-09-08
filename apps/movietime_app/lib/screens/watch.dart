@@ -90,6 +90,7 @@ class _WatchScreenState extends State<WatchScreen> {
   int? _userId;
   String? _userName;
   String? _listName;
+  List<String> _favoriteGenres = const [];
   String? _interactionError;
   _WatchContentDetails? _details;
   int _selectedSeason = 1;
@@ -108,6 +109,20 @@ class _WatchScreenState extends State<WatchScreen> {
   OverlayEntry? _ratingBadgeOverlay;
 
   bool get _hasCollection => _details?.collectionId != null && !_isSeries;
+
+  int? get _matchPercentage {
+    final details = _details;
+    // Score pode vir do details ou do widget inicial (quando ainda carregando)
+    final score = details?.tmdbScore ?? widget.initialVoteAverage;
+    // Se não há score, replica webapp MovieModal que retorna null (exibe '--%')
+    // mas aqui mantemos fallback para não quebrar layout - usa null para esconder
+    final genres = details?.genres ?? const <String>[];
+    final currentRating = _selectedRating == null
+        ? null
+        : _ratingLabelToApi(_selectedRating!);
+    // Quando não há score mas há genres/favorite, base 70 ainda aplica
+    return _calcMatch(score, genres, currentRating, _favoriteGenres);
+  }
 
   List<({String label, double width})> get _availableWatchTabs {
     if (_isSeries) {
@@ -151,6 +166,8 @@ class _WatchScreenState extends State<WatchScreen> {
       overview: widget.overview,
       year: widget.initialYear?.toString(),
       voteAverageLabel: widget.initialVoteAverage?.toStringAsFixed(1),
+      tmdbScore: widget.initialVoteAverage,
+      genres: const [],
     );
     _selectedSeason = widget.seasonNumber;
     _selectedEpisode = widget.episodeNumber;
@@ -241,6 +258,7 @@ class _WatchScreenState extends State<WatchScreen> {
         _userId = user.id;
         _userName = user.name;
         _listName = watchlist.listName ?? user.listName;
+        _favoriteGenres = user.preferences?.genres ?? const [];
         _isInMyList = watchlist.items.any(
           (item) =>
               item.tmdbId == widget.tmdbId &&
@@ -367,6 +385,8 @@ class _WatchScreenState extends State<WatchScreen> {
           posterUrl: widget.posterUrl,
           backdropUrl: widget.backdropUrl,
           overview: widget.overview,
+          tmdbScore: widget.initialVoteAverage,
+          genres: const [],
         );
         _cast = const [];
         _collectionItems = const [];
@@ -605,6 +625,41 @@ class _WatchScreenState extends State<WatchScreen> {
 
   Future<void> _handleDownload() async {
     final uri = _megaEmbedDownloadUri();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => EmbeddedPlayerScreen(url: uri)),
+    );
+  }
+
+  Future<void> _handlePlayEpisode(int episodeNumber) async {
+    if (!_isSeries) {
+      await _handlePlay();
+      return;
+    }
+    // Mantém seleção atual, mas reproduz direto o episódio clicado sem subir a página
+    if (episodeNumber != _selectedEpisode) {
+      setState(() => _selectedEpisode = episodeNumber);
+    }
+    final userId = _userId;
+    if (userId != null) {
+      try {
+        await _contentService.saveWatchHistory(
+          userId: userId,
+          tmdbId: widget.tmdbId,
+          mediaType: _normalizedMediaType,
+          title: widget.title,
+          seasonNumber: _selectedSeason,
+          episodeNumber: episodeNumber,
+          progressPercent: 0,
+          posterUrl: widget.posterUrl,
+          backdropUrl: widget.backdropUrl,
+        );
+      } catch (_) {}
+    }
+    final uri = Uri.https(
+      'megaembed.com',
+      '/embed/${widget.tmdbId}/$_selectedSeason/$episodeNumber',
+    );
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => EmbeddedPlayerScreen(url: uri)),
@@ -889,6 +944,7 @@ class _WatchScreenState extends State<WatchScreen> {
                     title: _displayTitle,
                     overview: _displayOverview,
                     details: _details,
+                    matchPercentage: _matchPercentage,
                     onPlay: _handlePlay,
                     onDownload: _handleDownload,
                   ),
@@ -1023,6 +1079,7 @@ class _WatchScreenState extends State<WatchScreen> {
           errorMessage: _seasonError,
           onSeasonChanged: _loadSeasonDetails,
           onEpisodeSelected: _selectEpisode,
+          onEpisodePlay: _handlePlayEpisode,
         ),
       );
     }
@@ -1312,11 +1369,13 @@ class _MovieInfoSummary extends StatefulWidget {
     required this.onDownload,
     this.overview,
     this.details,
+    this.matchPercentage,
   });
 
   final String title;
   final String? overview;
   final _WatchContentDetails? details;
+  final int? matchPercentage;
   final Future<void> Function() onPlay;
   final Future<void> Function() onDownload;
 
@@ -1398,6 +1457,7 @@ class _MovieInfoSummaryState extends State<_MovieInfoSummary> {
                             )
                           : _MovieMetaRow(
                               details: widget.details,
+                              matchPercentage: widget.matchPercentage,
                               key: const ValueKey('meta-row-loaded'),
                             ),
                     ),
@@ -1421,11 +1481,13 @@ class _MovieInfoSummaryState extends State<_MovieInfoSummary> {
                     : SizedBox(
                         key: ValueKey('overview-$_description'),
                         width: double.infinity,
-                        height: _isExpanded ? null : 70,
+                        // Altura removida para não criar gradiente via fade
                         child: Text(
                           _description,
                           maxLines: _isExpanded ? null : 3,
-                          overflow: _isExpanded ? null : TextOverflow.fade,
+                          overflow: _isExpanded
+                              ? TextOverflow.visible
+                              : TextOverflow.ellipsis,
                           style: style,
                         ),
                       ),
@@ -1460,9 +1522,10 @@ class _MovieInfoSummaryState extends State<_MovieInfoSummary> {
 }
 
 class _MovieMetaRow extends StatelessWidget {
-  const _MovieMetaRow({super.key, this.details});
+  const _MovieMetaRow({super.key, this.details, this.matchPercentage});
 
   final _WatchContentDetails? details;
+  final int? matchPercentage;
 
   @override
   Widget build(BuildContext context) {
@@ -1470,6 +1533,8 @@ class _MovieMetaRow extends StatelessWidget {
     final ageRating = details?.ageRating ?? '16+';
     final runtime = details?.runtimeLabel ?? '';
     final voteAverage = details?.voteAverageLabel ?? '8.0';
+    final matchText =
+        matchPercentage != null ? '$matchPercentage% match' : '91% match';
 
     return SizedBox(
       height: 20,
@@ -1478,8 +1543,8 @@ class _MovieMetaRow extends StatelessWidget {
         alignment: Alignment.centerLeft,
         child: Row(
           children: [
-            const Text(
-              '91% match',
+            Text(
+              matchText,
               style: TextStyle(
                 color: Color(0xFF45D468),
                 fontSize: 14,
@@ -1936,6 +2001,8 @@ class _WatchContentDetails {
     this.posterUrl,
     this.backdropUrl,
     this.titleLogoUrl,
+    this.genres = const [],
+    this.tmdbScore,
     this.year,
     this.ageRating,
     this.runtimeLabel,
@@ -1963,6 +2030,15 @@ class _WatchContentDetails {
     final runtime = _resolveRuntime(json);
     final voteAverage = (json['vote_average'] as num?)?.toDouble();
 
+    final genres = switch (json['genres']) {
+      final List<dynamic> values => [
+          for (final genre in values)
+            if (genre is Map<String, dynamic>)
+              _watchGenreNameFromJson(genre),
+        ].whereType<String>().toList(),
+      _ => const <String>[],
+    };
+
     return _WatchContentDetails(
       title: title,
       mediaType: mediaType,
@@ -1975,6 +2051,8 @@ class _WatchContentDetails {
           fallbackPosterUrl ??
           _tmdbImageUrl(backdropPath, size: 'w1280'),
       titleLogoUrl: fallbackTitleLogoUrl,
+      genres: genres,
+      tmdbScore: voteAverage,
       year: date.length >= 4 ? date.substring(0, 4) : '',
       ageRating: mediaType == 'tv' ? 'TV' : '16+',
       runtimeLabel: runtime > 0 ? _formatRuntime(runtime) : null,
@@ -2001,6 +2079,8 @@ class _WatchContentDetails {
     String? posterUrl,
     String? backdropUrl,
     String? titleLogoUrl,
+    List<String> genres = const [],
+    double? tmdbScore,
     String? overview,
     String? year,
     String? voteAverageLabel,
@@ -2012,6 +2092,8 @@ class _WatchContentDetails {
       posterUrl: posterUrl,
       backdropUrl: backdropUrl ?? posterUrl,
       titleLogoUrl: titleLogoUrl,
+      genres: genres,
+      tmdbScore: tmdbScore,
       overview: overview,
       year: year,
       voteAverageLabel: voteAverageLabel,
@@ -2025,6 +2107,8 @@ class _WatchContentDetails {
   final String? posterUrl;
   final String? backdropUrl;
   final String? titleLogoUrl;
+  final List<String> genres;
+  final double? tmdbScore;
   final String? year;
   final String? ageRating;
   final String? runtimeLabel;
@@ -2043,6 +2127,60 @@ bool _isNetflixNetwork(dynamic networks) {
         network['name']?.toString().toLowerCase() == 'netflix',
   );
 }
+
+// Replica exata de lib/match.ts do webapp
+int _calcMatch(
+  double? tmdbScore,
+  List<String> genres,
+  String? currentRating, // 'love' | 'like' | 'dislike' | null
+  List<String> favoriteGenres,
+) {
+  if (currentRating == 'love') return 97;
+  if (currentRating == 'like') return 85;
+  if (currentRating == 'dislike') return 15;
+
+  final base = tmdbScore != null ? (tmdbScore * 10).round() : 70;
+  var bonus = 0;
+  if (favoriteGenres.isNotEmpty && genres.isNotEmpty) {
+    final matches = genres.where((g) => favoriteGenres.contains(g)).length;
+    bonus = ((matches / genres.length) * 20).round();
+  }
+  return (base + bonus).clamp(1, 99);
+}
+
+String? _watchGenreNameFromJson(Map<String, dynamic> genre) {
+  final genreId = (genre['id'] as num?)?.toInt();
+  return genreId == null ? null : _watchGenreNamesPtBr[genreId];
+}
+
+const Map<int, String> _watchGenreNamesPtBr = {
+  12: 'Aventura',
+  14: 'Fantasia',
+  16: 'Animação',
+  18: 'Drama',
+  27: 'Terror',
+  28: 'Ação',
+  35: 'Comédia',
+  36: 'História',
+  37: 'Faroeste',
+  53: 'Suspense',
+  80: 'Crime',
+  99: 'Documentário',
+  878: 'Ficção científica',
+  9648: 'Mistério',
+  10402: 'Música',
+  10749: 'Romance',
+  10751: 'Família',
+  10752: 'Guerra',
+  10759: 'Ação e aventura',
+  10762: 'Infantil',
+  10763: 'Notícias',
+  10764: 'Reality',
+  10765: 'Sci-Fi e fantasia',
+  10766: 'Novela',
+  10770: 'Drama',
+  10768: 'War & Politics',
+};
 
 class _SeasonItemDetails {
   const _SeasonItemDetails({
@@ -2425,6 +2563,7 @@ class _EpisodesSection extends StatelessWidget {
     required this.errorMessage,
     required this.onSeasonChanged,
     required this.onEpisodeSelected,
+    required this.onEpisodePlay,
   });
 
   final bool isSeries;
@@ -2437,6 +2576,7 @@ class _EpisodesSection extends StatelessWidget {
   final String? errorMessage;
   final ValueChanged<int> onSeasonChanged;
   final ValueChanged<int> onEpisodeSelected;
+  final ValueChanged<int> onEpisodePlay;
 
   @override
   Widget build(BuildContext context) {
@@ -2494,6 +2634,9 @@ class _EpisodesSection extends StatelessWidget {
                 seasonDetails!.episodes[index].episodeNumber,
               ),
               onTap: () => onEpisodeSelected(
+                seasonDetails!.episodes[index].episodeNumber,
+              ),
+              onPlayTap: () => onEpisodePlay(
                 seasonDetails!.episodes[index].episodeNumber,
               ),
             ),
@@ -2568,12 +2711,14 @@ class _EpisodeCard extends StatelessWidget {
     required this.isSelected,
     required this.isWatched,
     required this.onTap,
+    required this.onPlayTap,
   });
 
   final _EpisodeDetails item;
   final bool isSelected;
   final bool isWatched;
   final VoidCallback onTap;
+  final VoidCallback onPlayTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2635,21 +2780,25 @@ class _EpisodeCard extends StatelessWidget {
                                 ),
                               Positioned.fill(
                                 child: Center(
-                                  child: Container(
-                                    width: iconSize,
-                                    height: iconSize,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0x8A000000),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 1.5,
+                                  child: GestureDetector(
+                                    onTap: onPlayTap,
+                                    behavior: HitTestBehavior.translucent,
+                                    child: Container(
+                                      width: iconSize,
+                                      height: iconSize,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0x8A000000),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 1.5,
+                                        ),
                                       ),
-                                    ),
-                                    child: Icon(
-                                      Icons.play_arrow_rounded,
-                                      color: Colors.white,
-                                      size: iconSize * 0.6,
+                                      child: Icon(
+                                        Icons.play_arrow_rounded,
+                                        color: Colors.white,
+                                        size: iconSize * 0.6,
+                                      ),
                                     ),
                                   ),
                                 ),
