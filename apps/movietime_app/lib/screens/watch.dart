@@ -690,7 +690,9 @@ class _WatchScreenState extends State<WatchScreen> {
         top: false,
         child: Stack(
           children: [
-            _HeroBlurBackground(imageUrl: _displayBackdropUrl),
+            // Fundo com imagem blur desativado.
+            // Para reativar, descomente a linha abaixo:
+            // _HeroBlurBackground(imageUrl: _displayBackdropUrl),
             Positioned(
               right: -175,
               top: -144,
@@ -1058,7 +1060,11 @@ class _WatchScreenState extends State<WatchScreen> {
   }
 }
 
+// Fundo blur desativado - classe mantida para reativação futura.
+// Para reativar: descomente o uso em WatchScreen.build (~linha 693) e mantenha esta classe.
+// ignore: unused_element
 class _HeroBlurBackground extends StatelessWidget {
+  // ignore: unused_element_parameter
   const _HeroBlurBackground({this.imageUrl});
 
   final String? imageUrl;
