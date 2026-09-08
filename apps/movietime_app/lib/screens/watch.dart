@@ -2759,7 +2759,7 @@ class _EpisodeCard extends StatelessWidget {
                         width: imageWidth,
                         height: imageHeight,
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(4),
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -3419,7 +3419,7 @@ class _RelatedItemCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(4),
               child: _WatchHeroImage(
                 imageUrl: item.posterUrl,
                 width: 132,

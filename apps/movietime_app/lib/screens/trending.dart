@@ -201,7 +201,7 @@ class _TrendingScreenState extends State<TrendingScreen> {
                               ),
                             ),
                             child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(4),
                               child: item.posterUrl == null
                                   ? Container(color: const Color(0xFF1A1A1A))
                                   : Image.network(item.posterUrl!, fit: BoxFit.cover),

@@ -595,7 +595,7 @@ class _PosterCard extends StatelessWidget {
         child: Stack(
           children: [
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(4),
               child: _RemotePoster(url: item.posterUrl, width: 120),
             ),
             if (onRemove != null)

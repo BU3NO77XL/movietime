@@ -1259,7 +1259,7 @@ class _PosterRow extends StatelessWidget {
                 decoration: ShapeDecoration(
                   color: const Color(0xFF1A1A1A),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
                 child: const SizedBox(
@@ -1321,7 +1321,7 @@ class _PosterRow extends StatelessWidget {
                               decoration: ShapeDecoration(
                                 color: const Color(0xFF1A1A1A),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
                               ),
                               child: Hero(

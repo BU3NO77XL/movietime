@@ -1301,7 +1301,7 @@ class _SearchPoster extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(4),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -1513,7 +1513,7 @@ class _TypingMoviePoster extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(4),
       child: SizedBox(
         width: 104,
         height: 127,

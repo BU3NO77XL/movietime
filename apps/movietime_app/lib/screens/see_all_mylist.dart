@@ -1083,7 +1083,7 @@ class _SearchResultTile extends StatelessWidget {
       child: Row(
         children: [
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(4),
             child: _seeAllImage(item.image, width: 60, height: 60),
           ),
           const SizedBox(width: 15),
@@ -1150,7 +1150,7 @@ class _SeeAllPoster extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(4),
                 child: _seeAllImage(
                   item.image,
                   width: double.infinity,
