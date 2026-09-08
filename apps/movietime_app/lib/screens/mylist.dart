@@ -85,12 +85,31 @@ class _MyListScreenState extends State<MyListScreen> {
         results[2] as Map<String, dynamic>,
       );
 
+      // Deduplica por tmdbId+mediaType mantendo apenas o mais recente (evita vários posters da mesma série em "Vistos recentemente")
+      final latestByKey = <String, WatchHistoryItem>{};
+      for (final item in history) {
+        final key = '${item.tmdbId}_${item.mediaType}';
+        final existing = latestByKey[key];
+        final itemDate =
+            DateTime.tryParse(item.watchedAt ?? '') ?? DateTime(0);
+        final existingDate =
+            DateTime.tryParse(existing?.watchedAt ?? '') ?? DateTime(0);
+        if (existing == null || !itemDate.isBefore(existingDate)) {
+          latestByKey[key] = item;
+        }
+      }
+      final dedupedHistory = latestByKey.values.toList()
+        ..sort(
+          (a, b) => (DateTime.tryParse(b.watchedAt ?? '') ?? DateTime(0))
+              .compareTo(DateTime.tryParse(a.watchedAt ?? '') ?? DateTime(0)),
+        );
+
       if (!mounted) return;
       setState(() {
         _user = user;
         _listName = watchlist.listName ?? user.listName;
         _watchlist = watchlist.items;
-        _history = history;
+        _history = dedupedHistory;
         _featuredSeries = featuredSeries;
         _isLoading = false;
         _errorMessage = null;
