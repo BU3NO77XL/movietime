@@ -9,6 +9,8 @@ import '../services/content_models.dart';
 import '../widgets/home_bottom_nav.dart';
 import '../widgets/logo_loader.dart';
 import '../widgets/netflix_badge.dart';
+import '../widgets/poster_netflix_badge.dart';
+import '../services/netflix_cache.dart';
 import 'home_search.dart';
 import 'mylist.dart';
 import 'profile.dart';
@@ -924,10 +926,38 @@ class _HeroCard extends StatelessWidget {
                       Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (item?.isNetflix == true) ...[
-                            NetflixBadge(showSeries: item?.mediaType == 'tv'),
-                            const SizedBox(height: 6),
-                          ],
+                          Builder(
+                            builder: (context) {
+                              final heroItem = item;
+                              if (heroItem == null) {
+                                return const SizedBox.shrink();
+                              }
+                              return FutureBuilder<bool>(
+                                future: NetflixCache.isOnNetflix(
+                                  heroItem.tmdbId,
+                                  heroItem.mediaType,
+                                ),
+                                builder: (context, snapshot) {
+                                  final isNetflix =
+                                      heroItem.isNetflix ||
+                                      (snapshot.data == true);
+                                  if (!isNetflix) {
+                                    return const SizedBox.shrink();
+                                  }
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      NetflixBadge(
+                                        showSeries:
+                                            heroItem.mediaType == 'tv',
+                                      ),
+                                      const SizedBox(height: 6),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                          ),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: AnimatedSwitcher(
@@ -1358,6 +1388,10 @@ class _PosterRow extends StatelessWidget {
                                             },
                                       ),
                               ),
+                            ),
+                            PosterNetflixBadge(
+                              tmdbId: item.tmdbId,
+                              mediaType: item.mediaType,
                             ),
                             if (_hasWatchProgress(item))
                               Positioned(

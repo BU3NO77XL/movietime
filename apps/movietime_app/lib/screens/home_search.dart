@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../services/content_service.dart';
+import '../widgets/poster_netflix_badge.dart';
 import 'screen_transitions.dart';
 import 'watch.dart';
 
@@ -1306,6 +1307,10 @@ class _SearchPoster extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           _TitlePoster(url: item.posterUrl),
+          PosterNetflixBadge(
+            tmdbId: item.tmdbId,
+            mediaType: item.mediaType,
+          ),
           Positioned(
             top: 8,
             right: 8,
@@ -1514,10 +1519,18 @@ class _TypingMoviePoster extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(4),
-      child: SizedBox(
-        width: 104,
-        height: 127,
-        child: _TitlePoster(url: item.posterUrl),
+      child: Stack(
+        children: [
+          SizedBox(
+            width: 104,
+            height: 127,
+            child: _TitlePoster(url: item.posterUrl),
+          ),
+          PosterNetflixBadge(
+            tmdbId: item.tmdbId,
+            mediaType: item.mediaType,
+          ),
+        ],
       ),
     );
   }

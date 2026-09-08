@@ -16,6 +16,7 @@ import 'trending.dart';
 import 'screen_transitions.dart';
 import 'see_all_mylist.dart';
 import 'watch.dart';
+import '../widgets/poster_netflix_badge.dart';
 // PÁGINA SÉRIE PERSONALIZADA DESATIVADA — lógica mantida comentada:
 // import 'watch_series_mylist.dart';
 
@@ -488,23 +489,31 @@ class _FeaturedSeriesSection extends StatelessWidget {
               final item = items[index];
               return GestureDetector(
                 onTap: () => onTap(item),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: SizedBox(
-                    width: 180,
-                    height: 240,
-                    child: Image.network(
-                      item.posterUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const ColoredBox(
-                        color: Color(0xFF262626),
-                        child: Icon(
-                          Icons.image_not_supported_outlined,
-                          color: Color(0xFF525252),
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: SizedBox(
+                        width: 180,
+                        height: 240,
+                        child: Image.network(
+                          item.posterUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const ColoredBox(
+                            color: Color(0xFF262626),
+                            child: Icon(
+                              Icons.image_not_supported_outlined,
+                              color: Color(0xFF525252),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    PosterNetflixBadge(
+                      tmdbId: item.tmdbId,
+                      mediaType: 'tv',
+                    ),
+                  ],
                 ),
               );
             },
@@ -597,6 +606,10 @@ class _PosterCard extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: _RemotePoster(url: item.posterUrl, width: 120),
+            ),
+            PosterNetflixBadge(
+              tmdbId: item.tmdbId,
+              mediaType: item.mediaType,
             ),
             if (onRemove != null)
               Positioned(

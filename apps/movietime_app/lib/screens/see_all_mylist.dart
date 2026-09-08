@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/content_models.dart';
 import '../services/content_service.dart';
 import '../widgets/home_bottom_nav.dart';
+import '../widgets/poster_netflix_badge.dart';
 import 'screen_transitions.dart';
 import 'watch.dart';
 
@@ -1082,9 +1083,17 @@ class _SearchResultTile extends StatelessWidget {
       height: 60,
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: _seeAllImage(item.image, width: 60, height: 60),
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: _seeAllImage(item.image, width: 60, height: 60),
+              ),
+              PosterNetflixBadge(
+                tmdbId: item.content.tmdbId,
+                mediaType: item.content.mediaType,
+              ),
+            ],
           ),
           const SizedBox(width: 15),
           Expanded(
@@ -1149,13 +1158,21 @@ class _SeeAllPoster extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: _seeAllImage(
-                  item.image,
-                  width: double.infinity,
-                  height: posterHeight,
-                ),
+              Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: _seeAllImage(
+                      item.image,
+                      width: double.infinity,
+                      height: posterHeight,
+                    ),
+                  ),
+                  PosterNetflixBadge(
+                    tmdbId: item.content.tmdbId,
+                    mediaType: item.content.mediaType,
+                  ),
+                ],
               ),
               const SizedBox(height: 9),
               Text(

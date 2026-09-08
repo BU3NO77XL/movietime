@@ -8,6 +8,7 @@ import '../services/auth_service.dart';
 import '../services/content_models.dart';
 import '../services/content_service.dart';
 import '../widgets/netflix_badge.dart';
+import '../widgets/poster_netflix_badge.dart';
 import 'create_list_modal.dart';
 import 'embedded_player.dart';
 import '../widgets/logo_loader.dart';
@@ -359,6 +360,15 @@ class _WatchScreenState extends State<WatchScreen> {
           }
         }
       });
+      // Filme com coleção: primeiro da toolbar deve ser Coleção, não "Mais como este"
+      if (!_isSeries &&
+          nextDetails.collectionId != null &&
+          _selectedWatchTab == 'Mais como este') {
+        setState(() => _selectedWatchTab = 'Coleção');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollWatchTabIntoView('Coleção', jump: true);
+        });
+      }
       if (!_isSeries && nextDetails.collectionId != null) {
         try {
           final collectionData = await _contentService.tmdb(
@@ -837,8 +847,8 @@ class _WatchScreenState extends State<WatchScreen> {
                                             ],
                                             stops: const [
                                               0.0,
-                                              0.45,
-                                              0.72,
+                                              0.50,
+                                              0.78,
                                               1.0,
                                             ],
                                           ),
@@ -1414,13 +1424,11 @@ class _MovieInfoSummaryState extends State<_MovieInfoSummary> {
 
         return SizedBox(
           width: double.infinity,
-          height: _isExpanded ? null : 306,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
                 width: double.infinity,
-                height: showsNetflixBadge ? 100 : 70,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1428,23 +1436,65 @@ class _MovieInfoSummaryState extends State<_MovieInfoSummary> {
                       NetflixBadge(
                         showSeries: widget.details?.mediaType == 'tv',
                       ),
-                    SizedBox(
-                      height: 38,
-                      width: double.infinity,
-                      child: Text(
-                        widget.title,
-                        maxLines: 1,
-                        softWrap: false,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontFamily: 'Netflix Sans',
-                          fontWeight: FontWeight.w500,
-                          letterSpacing: -0.25,
-                          height: 38 / 32,
-                        ),
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final logoUrl = widget.details?.titleLogoUrl;
+                        final hasLogo =
+                            logoUrl != null && logoUrl.isNotEmpty;
+                        if (hasLogo) {
+                          // ignore: unnecessary_non_null_assertion
+                          final url = logoUrl!;
+                          return SizedBox(
+                            height: 56,
+                            width: double.infinity,
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Image.network(
+                                url,
+                                height: 48,
+                                fit: BoxFit.contain,
+                                alignment: Alignment.centerLeft,
+                                errorBuilder: (_, _, _) => Text(
+                                  widget.title,
+                                  maxLines: 1,
+                                  softWrap: false,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 32,
+                                    fontFamily: 'Netflix Sans',
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: -0.25,
+                                    height: 38 / 32,
+                                  ),
+                                ),
+                                loadingBuilder: (context, child, progress) {
+                                  if (progress == null) return child;
+                                  return const SizedBox(height: 48);
+                                },
+                              ),
+                            ),
+                          );
+                        }
+                        return SizedBox(
+                          height: 38,
+                          width: double.infinity,
+                          child: Text(
+                            widget.title,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontFamily: 'Netflix Sans',
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: -0.25,
+                              height: 38 / 32,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     SizedBox(height: 9),
                     AnimatedSwitcher(
@@ -2988,16 +3038,16 @@ class _CastRow extends StatelessWidget {
     final screenWidth = MediaQuery.sizeOf(context).width;
 
     return SizedBox(
-      height: 106,
+      height: 112,
       child: OverflowBox(
         alignment: Alignment.center,
         minWidth: screenWidth,
         maxWidth: screenWidth,
-        minHeight: 106,
-        maxHeight: 106,
+        minHeight: 112,
+        maxHeight: 112,
         child: SizedBox(
           width: screenWidth,
-          height: 106,
+          height: 112,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
@@ -3418,13 +3468,21 @@ class _RelatedItemCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: _WatchHeroImage(
-                imageUrl: item.posterUrl,
-                width: 132,
-                height: 186,
-              ),
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: _WatchHeroImage(
+                    imageUrl: item.posterUrl,
+                    width: 132,
+                    height: 186,
+                  ),
+                ),
+                PosterNetflixBadge(
+                  tmdbId: item.tmdbId,
+                  mediaType: item.mediaType,
+                ),
+              ],
             ),
             const SizedBox(height: 10),
             Text(

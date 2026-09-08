@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services/content_service.dart';
 import '../widgets/home_bottom_nav.dart';
 import '../widgets/logo_loader.dart';
+import '../widgets/poster_netflix_badge.dart';
 import 'home.dart';
 import 'mylist.dart';
 import 'profile.dart';
@@ -200,11 +201,24 @@ class _TrendingScreenState extends State<TrendingScreen> {
                                 ),
                               ),
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: item.posterUrl == null
-                                  ? Container(color: const Color(0xFF1A1A1A))
-                                  : Image.network(item.posterUrl!, fit: BoxFit.cover),
+                            child: Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: item.posterUrl == null
+                                      ? Container(
+                                          color: const Color(0xFF1A1A1A),
+                                        )
+                                      : Image.network(
+                                          item.posterUrl!,
+                                          fit: BoxFit.cover,
+                                        ),
+                                ),
+                                PosterNetflixBadge(
+                                  tmdbId: item.tmdbId,
+                                  mediaType: item.mediaType,
+                                ),
+                              ],
                             ),
                           );
                         },
