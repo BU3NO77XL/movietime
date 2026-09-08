@@ -454,7 +454,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             final headerTitleSize = isNarrowScreen ? 20.0 : 24.0;
             final headerGap = isNarrowScreen ? 6.0 : 8.0;
             final headerIconGap = isNarrowScreen ? 8.0 : 12.0;
-            const heroBlurHeight = 920.0;
+            const heroBlurHeight = 760.0;
             const heroBlurFadeHeight = 180.0;
             const chipInnerSideRadius = Radius.circular(12);
             const chipOuterSideRadius = Radius.circular(22);
