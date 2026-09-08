@@ -294,16 +294,32 @@ class _WatchScreenState extends State<WatchScreen> {
           '$endpoint/similar',
           query: const {'language': 'pt-BR', 'page': '1'},
         ),
+        // Backdrop PT-BR + logos pt-BR/pt/null/en (título removido do hero mas mantido para uso futuro)
+        _contentService
+            .tmdb(
+              '$endpoint/images',
+              query: const {'include_image_language': 'pt-BR,pt,null,en'},
+            )
+            .catchError((_) => <String, dynamic>{}),
       ]);
-      final data = responses[0];
-      final credits = responses[1];
-      final similar = responses[2];
+      // ignore: unnecessary_cast
+      final data = responses[0] as Map<String, dynamic>;
+      // ignore: unnecessary_cast
+      final credits = responses[1] as Map<String, dynamic>;
+      // ignore: unnecessary_cast
+      final similar = responses[2] as Map<String, dynamic>;
+      // ignore: unnecessary_cast
+      final images = responses[3] as Map<String, dynamic>;
+      final resolvedBackdrop = _resolveBackdropImageUrl(images);
+      final resolvedLogo = _resolveTitleLogoUrl(images);
       final nextDetails = _WatchContentDetails.fromJson(
         data,
         mediaType: _normalizedMediaType,
         fallbackTitle: widget.title,
         fallbackPosterUrl: widget.posterUrl,
-        fallbackBackdropUrl: widget.backdropUrl,
+        // Prioriza backdrop pt/null/en da chamada /images
+        fallbackBackdropUrl: resolvedBackdrop ?? widget.backdropUrl,
+        fallbackTitleLogoUrl: resolvedLogo,
         fallbackOverview: widget.overview,
       );
       if (!mounted) return;
@@ -1822,6 +1838,56 @@ class _WatchHeroImage extends StatelessWidget {
   }
 }
 
+// Título personalizado removido do hero - classe mantida para reativação futura
+// ignore: unused_element
+class _WatchHeroTitle extends StatelessWidget {
+  // ignore: unused_element_parameter
+  const _WatchHeroTitle({required this.title, this.logoUrl});
+
+  final String title;
+  final String? logoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final textFallback = Text(
+      title,
+      maxLines: 2,
+      textAlign: TextAlign.center,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 28,
+        fontFamily: 'Netflix Sans',
+        fontWeight: FontWeight.w700,
+        height: 1.08,
+        shadows: [
+          Shadow(
+            color: Color(0xCC000000),
+            blurRadius: 12,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+    );
+
+    if (logoUrl == null || logoUrl!.isEmpty) return textFallback;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 320, minHeight: 48),
+      child: Image.network(
+        logoUrl!,
+        height: 68,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => textFallback,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return const SizedBox(height: 68);
+        },
+      ),
+    );
+  }
+}
+
 class _WatchInlineError extends StatelessWidget {
   const _WatchInlineError({required this.message});
 
@@ -1869,6 +1935,7 @@ class _WatchContentDetails {
     this.overview,
     this.posterUrl,
     this.backdropUrl,
+    this.titleLogoUrl,
     this.year,
     this.ageRating,
     this.runtimeLabel,
@@ -1885,6 +1952,7 @@ class _WatchContentDetails {
     required String fallbackTitle,
     String? fallbackPosterUrl,
     String? fallbackBackdropUrl,
+    String? fallbackTitleLogoUrl,
     String? fallbackOverview,
   }) {
     final title = (json['title'] ?? json['name'] ?? fallbackTitle).toString();
@@ -1906,6 +1974,7 @@ class _WatchContentDetails {
           fallbackBackdropUrl ??
           fallbackPosterUrl ??
           _tmdbImageUrl(backdropPath, size: 'w1280'),
+      titleLogoUrl: fallbackTitleLogoUrl,
       year: date.length >= 4 ? date.substring(0, 4) : '',
       ageRating: mediaType == 'tv' ? 'TV' : '16+',
       runtimeLabel: runtime > 0 ? _formatRuntime(runtime) : null,
@@ -1931,6 +2000,7 @@ class _WatchContentDetails {
     required String title,
     String? posterUrl,
     String? backdropUrl,
+    String? titleLogoUrl,
     String? overview,
     String? year,
     String? voteAverageLabel,
@@ -1941,6 +2011,7 @@ class _WatchContentDetails {
       mediaType: mediaType,
       posterUrl: posterUrl,
       backdropUrl: backdropUrl ?? posterUrl,
+      titleLogoUrl: titleLogoUrl,
       overview: overview,
       year: year,
       voteAverageLabel: voteAverageLabel,
@@ -1953,6 +2024,7 @@ class _WatchContentDetails {
   final String? overview;
   final String? posterUrl;
   final String? backdropUrl;
+  final String? titleLogoUrl;
   final String? year;
   final String? ageRating;
   final String? runtimeLabel;
@@ -2108,6 +2180,83 @@ String? _tmdbImageUrl(String? path, {String size = 'w780'}) {
   if (path == null || path.isEmpty) return null;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return 'https://image.tmdb.org/t/p/$size$path';
+}
+
+String? _resolveBackdropImageUrl(Map<String, dynamic> json) {
+  final backdrops = json['backdrops'];
+  if (backdrops is! List || backdrops.isEmpty) return null;
+  // Filtra apenas PT-BR (iso_639_1 == 'pt-BR') - sem pt genérico/en/null
+  final candidates = [
+    for (final item in backdrops)
+      if (item is Map<String, dynamic> &&
+          item['file_path']?.toString().isNotEmpty == true &&
+          item['iso_639_1']?.toString() == 'pt-BR')
+        item,
+  ];
+  if (candidates.isEmpty) return null;
+
+  candidates.sort((a, b) {
+    final byVote =
+        ((b['vote_average'] as num?)?.toDouble() ?? 0).compareTo(
+          (a['vote_average'] as num?)?.toDouble() ?? 0,
+        );
+    if (byVote != 0) return byVote;
+    return ((b['width'] as num?)?.toInt() ?? 0).compareTo(
+      (a['width'] as num?)?.toInt() ?? 0,
+    );
+  });
+
+  return _tmdbImageUrl(
+    candidates.first['file_path']?.toString(),
+    size: 'w1280',
+  );
+}
+
+String? _resolveTitleLogoUrl(Map<String, dynamic> json) {
+  final logos = json['logos'];
+  if (logos is! List || logos.isEmpty) return null;
+  final candidates = [
+    for (final item in logos)
+      if (item is Map<String, dynamic> &&
+          item['file_path']?.toString().isNotEmpty == true)
+        item,
+  ];
+  if (candidates.isEmpty) return null;
+
+  int langPriority(String? code) {
+    switch (code) {
+      case 'pt-BR':
+        return 0;
+      case 'pt':
+        return 1;
+      case null:
+      case '':
+        return 2;
+      case 'en':
+        return 3;
+      default:
+        return 4;
+    }
+  }
+
+  candidates.sort((a, b) {
+    final byLang = langPriority(a['iso_639_1']?.toString())
+        .compareTo(langPriority(b['iso_639_1']?.toString()));
+    if (byLang != 0) return byLang;
+    final byVote =
+        ((b['vote_average'] as num?)?.toDouble() ?? 0).compareTo(
+          (a['vote_average'] as num?)?.toDouble() ?? 0,
+        );
+    if (byVote != 0) return byVote;
+    return ((b['width'] as num?)?.toInt() ?? 0).compareTo(
+      (a['width'] as num?)?.toInt() ?? 0,
+    );
+  });
+
+  return _tmdbImageUrl(
+    candidates.first['file_path']?.toString(),
+    size: 'original',
+  );
 }
 
 List<_CastPerson> _parseCast(Map<String, dynamic> json) {
